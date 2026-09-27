@@ -188,15 +188,15 @@
 
                         <MenuItem x:Name="RestartWorkstationMenuItem"
                                   Header="Khởi động lại"
-                                  IsEnabled="False"/>
+                                  Click="RestartWorkstationMenuItem_Click"/>
 
                         <MenuItem x:Name="ShutdownWorkstationMenuItem"
                                   Header="Tắt máy"
-                                  IsEnabled="False"/>
+                                  Click="ShutdownWorkstationMenuItem_Click"/>
 
                         <MenuItem x:Name="CloseApplicationsMenuItem"
                                   Header="Đóng tất cả ứng dụng"
-                                  IsEnabled="False"/>
+                                  Click="CloseApplicationsMenuItem_Click"/>
 
                         <Separator x:Name="ServiceSeparator"/>
 

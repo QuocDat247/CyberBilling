@@ -1,4 +1,5 @@
 ﻿using CyberBilling.Shared.Networking;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -15,6 +16,17 @@ public sealed class TcpBillingServer :
     private static readonly TimeSpan
         ClientTimeout =
             TimeSpan.FromSeconds(15);
+
+    private readonly object
+        _commandChannelsLock =
+            new();
+
+    private readonly Dictionary<
+        string,
+        ClientCommandChannel>
+        _commandChannels =
+            new(
+                StringComparer.Ordinal);
 
     private TcpListener?
         _listener;
@@ -60,6 +72,28 @@ public sealed class TcpBillingServer :
         return Task.CompletedTask;
     }
 
+    public bool TryQueueWorkstationCommand(
+        string machineId,
+        WorkstationCommandType command)
+    {
+        lock (_commandChannelsLock)
+        {
+            if (!_commandChannels
+                    .TryGetValue(
+                        machineId,
+                        out ClientCommandChannel?
+                            channel))
+            {
+                return false;
+            }
+
+            channel.Commands.Enqueue(
+                command);
+
+            return true;
+        }
+    }
+
     private async Task AcceptLoopAsync(
         CancellationToken cancellationToken)
     {
@@ -97,6 +131,9 @@ public sealed class TcpBillingServer :
     {
         WorkstationConnectionInfo?
             connectionInfo = null;
+
+        ClientCommandChannel?
+            commandChannel = null;
 
         bool gracefulShutdownReceived =
             false;
@@ -168,12 +205,22 @@ public sealed class TcpBillingServer :
                 return;
             }
 
+            commandChannel =
+                new ClientCommandChannel();
+
+            lock (_commandChannelsLock)
+            {
+                _commandChannels[
+                    hello.MachineId] =
+                    commandChannel;
+            }
+
             string remoteIp =
                 ((IPEndPoint?)
                     client.Client.RemoteEndPoint)?
                     .Address
                     .ToString()
-                ?? "Unknown";
+                ?? "Không xác định";
 
             DateTime connectedAt =
                 DateTime.Now;
@@ -263,6 +310,32 @@ public sealed class TcpBillingServer :
                     RaiseConnectionChanged(
                         connectionInfo);
 
+                    /*
+                     * Gửi các lệnh đang chờ
+                     * trước HeartbeatAck.
+                     *
+                     * Client sẽ xử lý từng lệnh,
+                     * sau đó tiếp tục đọc tới ACK.
+                     */
+                    while (commandChannel
+                               .Commands
+                               .TryDequeue(
+                                   out WorkstationCommandType
+                                       commandType))
+                    {
+                        string commandMessage =
+                            ProtocolJson.Serialize(
+                                MessageTypes
+                                    .WorkstationCommand,
+                                new WorkstationCommandPayload(
+                                    commandType,
+                                    DateTime.UtcNow));
+
+                        await writer
+                            .WriteLineAsync(
+                                commandMessage);
+                    }
+
                     string ack =
                         ProtocolJson.Serialize(
                             MessageTypes
@@ -298,26 +371,41 @@ public sealed class TcpBillingServer :
         }
         catch (TimeoutException)
         {
-            // Không nhận được dữ liệu trong
-            // khoảng timeout quy định.
         }
         catch (OperationCanceledException)
             when (cancellationToken
                 .IsCancellationRequested)
         {
-            // Server đang dừng.
         }
         catch (IOException)
         {
-            // Kết nối bị mất.
         }
         catch (SocketException)
         {
-            // Kết nối bị mất.
         }
         finally
         {
             client.Dispose();
+
+            if (connectionInfo is not null
+                && commandChannel is not null)
+            {
+                lock (_commandChannelsLock)
+                {
+                    if (_commandChannels
+                            .TryGetValue(
+                                connectionInfo.MachineId,
+                                out ClientCommandChannel?
+                                    current)
+                        && ReferenceEquals(
+                            current,
+                            commandChannel))
+                    {
+                        _commandChannels.Remove(
+                            connectionInfo.MachineId);
+                    }
+                }
+            }
 
             if (connectionInfo is not null
                 && !cancellationToken
@@ -404,6 +492,11 @@ public sealed class TcpBillingServer :
             }
         }
 
+        lock (_commandChannelsLock)
+        {
+            _commandChannels.Clear();
+        }
+
         _cancellationTokenSource?
             .Dispose();
 
@@ -415,5 +508,16 @@ public sealed class TcpBillingServer :
 
         _acceptLoopTask =
             null;
+    }
+
+    private sealed class ClientCommandChannel
+    {
+        public ConcurrentQueue<
+            WorkstationCommandType>
+            Commands
+        {
+            get;
+        } =
+            new();
     }
 }

@@ -1,15 +1,16 @@
-﻿using System.Collections.ObjectModel;
+﻿using CyberBilling.Server.Billing;
+using CyberBilling.Server.Dialogs;
+using CyberBilling.Server.Models;
+using CyberBilling.Server.Networking;
+using CyberBilling.Server.Persistence;
+using CyberBilling.Shared.Networking;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
-using CyberBilling.Server.Billing;
-using CyberBilling.Server.Dialogs;
-using CyberBilling.Server.Models;
-using CyberBilling.Server.Networking;
-using CyberBilling.Server.Persistence;
 
 namespace CyberBilling.Server;
 
@@ -965,14 +966,23 @@ public partial class MainWindow :
             BillingDialogResult
                 .PayAndShutdown)
         {
-            MessageBox.Show(
-                "Đã thanh toán.\n\n"
-                + "Lệnh tắt máy sẽ được nối "
-                + "vào Client ở milestone "
-                + "điều khiển máy trạm.",
-                "CyberBilling",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            bool queued =
+                _billingServer
+                    .TryQueueWorkstationCommand(
+                        row.MachineId,
+                        WorkstationCommandType
+                            .Shutdown);
+
+            if (!queued)
+            {
+                MessageBox.Show(
+                    "Đã thanh toán thành công,\n"
+                    + "nhưng không thể gửi lệnh tắt máy "
+                    + "vì máy trạm đã mất kết nối.",
+                    "CyberBilling",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
         }
     }
 
@@ -2061,6 +2071,171 @@ public partial class MainWindow :
             0,
             (long)Math.Floor(
                 duration.TotalSeconds));
+    }
+
+    private void RestartWorkstationMenuItem_Click(
+    object sender,
+    RoutedEventArgs e)
+    {
+        if (!TryGetSelectedOnlineWorkstation(
+                out WorkstationRow row))
+        {
+            return;
+        }
+
+        MessageBoxResult result =
+            MessageBox.Show(
+                "Khởi động lại máy "
+                + row.WorkstationNumberText
+                + " - "
+                + row.MachineName
+                + "?",
+                "Khởi động lại máy trạm",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+        if (result !=
+            MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        QueueWorkstationCommand(
+            row,
+            WorkstationCommandType.Restart,
+            "Đã gửi yêu cầu khởi động lại.");
+    }
+
+    private void ShutdownWorkstationMenuItem_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (!TryGetSelectedOnlineWorkstation(
+                out WorkstationRow row))
+        {
+            return;
+        }
+
+        MessageBoxResult result =
+            MessageBox.Show(
+                "Tắt máy "
+                + row.WorkstationNumberText
+                + " - "
+                + row.MachineName
+                + "?",
+                "Tắt máy trạm",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+        if (result !=
+            MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        QueueWorkstationCommand(
+            row,
+            WorkstationCommandType.Shutdown,
+            "Đã gửi yêu cầu tắt máy.");
+    }
+
+    private void CloseApplicationsMenuItem_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (!TryGetSelectedOnlineWorkstation(
+                out WorkstationRow row))
+        {
+            return;
+        }
+
+        MessageBoxResult result =
+            MessageBox.Show(
+                "Đóng các ứng dụng đang mở trên máy "
+                + row.WorkstationNumberText
+                + " - "
+                + row.MachineName
+                + "?\n\n"
+                + "CyberBilling sẽ không bị đóng.",
+                "Đóng ứng dụng",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+        if (result !=
+            MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        QueueWorkstationCommand(
+            row,
+            WorkstationCommandType
+                .CloseApplications,
+            "Đã gửi yêu cầu đóng ứng dụng.");
+    }
+
+    private bool TryGetSelectedOnlineWorkstation(
+        out WorkstationRow row)
+    {
+        if (WorkstationsGrid.SelectedItem
+            is not WorkstationRow selectedRow)
+        {
+            row =
+                null!;
+
+            return false;
+        }
+
+        if (selectedRow.ConnectionState !=
+            WorkstationConnectionState.Online)
+        {
+            MessageBox.Show(
+                "Máy trạm hiện không kết nối.",
+                "CyberBilling",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+
+            row =
+                null!;
+
+            return false;
+        }
+
+        row =
+            selectedRow;
+
+        return true;
+    }
+
+    private void QueueWorkstationCommand(
+        WorkstationRow row,
+        WorkstationCommandType command,
+        string successMessage)
+    {
+        bool queued =
+            _billingServer
+                .TryQueueWorkstationCommand(
+                    row.MachineId,
+                    command);
+
+        if (!queued)
+        {
+            MessageBox.Show(
+                "Không thể gửi lệnh tới máy trạm.\n\n"
+                + "Máy có thể vừa mất kết nối.",
+                "CyberBilling",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+
+            return;
+        }
+
+        MessageBox.Show(
+            successMessage
+            + "\n\nMáy trạm sẽ xử lý trong vài giây.",
+            "CyberBilling",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
     }
 
     private sealed record WorkstationSessionState(

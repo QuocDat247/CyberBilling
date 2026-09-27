@@ -13,4 +13,7 @@ public static class MessageTypes
 
     public const string ClientShutdown =
         "client.shutdown";
+
+    public const string WorkstationCommand =
+        "server.workstation-command";
 }

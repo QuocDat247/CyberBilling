@@ -1,4 +1,5 @@
-﻿using CyberBilling.Shared.Networking;
+﻿using CyberBilling.Client.SystemControl;
+using CyberBilling.Shared.Networking;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
@@ -174,34 +175,97 @@ public sealed class TcpBillingClient :
                         .WriteLineAsync(
                             heartbeatMessage);
 
-                    string? response =
-                        await ReadLineWithTimeoutAsync(
-                            reader,
-                            HeartbeatResponseTimeout,
-                            cancellationToken);
+                    bool heartbeatAcknowledged =
+    false;
 
-                    if (response is null)
+                    while (!heartbeatAcknowledged)
                     {
-                        throw new IOException(
-                            "Server đã đóng kết nối.");
-                    }
+                        string? response =
+                            await ReadLineWithTimeoutAsync(
+                                reader,
+                                HeartbeatResponseTimeout,
+                                cancellationToken);
 
-                    ProtocolMessage?
-                        responseMessage =
-                            ProtocolJson
-                                .DeserializeMessage(
-                                    response);
+                        if (response is null)
+                        {
+                            throw new IOException(
+                                "Máy tính tiền đã đóng kết nối.");
+                        }
 
-                    if (responseMessage is null
-                        || !string.Equals(
-                            responseMessage.Type,
-                            MessageTypes
-                                .HeartbeatAck,
-                            StringComparison.Ordinal))
-                    {
+                        ProtocolMessage?
+                            responseMessage =
+                                ProtocolJson
+                                    .DeserializeMessage(
+                                        response);
+
+                        if (responseMessage is null)
+                        {
+                            continue;
+                        }
+
+                        if (string.Equals(
+                                responseMessage.Type,
+                                MessageTypes.HeartbeatAck,
+                                StringComparison.Ordinal))
+                        {
+                            heartbeatAcknowledged =
+                                true;
+
+                            continue;
+                        }
+
+                        if (string.Equals(
+                                responseMessage.Type,
+                                MessageTypes.WorkstationCommand,
+                                StringComparison.Ordinal))
+                        {
+                            WorkstationCommandPayload?
+                                command =
+                                    ProtocolJson
+                                        .DeserializePayload<
+                                            WorkstationCommandPayload>(
+                                                responseMessage);
+
+                            if (command is null)
+                            {
+                                continue;
+                            }
+
+                            bool powerCommand =
+                                command.Command ==
+                                    WorkstationCommandType
+                                        .Restart
+                                || command.Command ==
+                                    WorkstationCommandType
+                                        .Shutdown;
+
+                            if (powerCommand)
+                            {
+                                /*
+                                 * Chỉ gửi trạng thái "Đã tắt"
+                                 * sau khi Windows chấp nhận
+                                 * lệnh restart/shutdown.
+                                 */
+                                WorkstationCommandExecutor
+                                    .Execute(
+                                        command.Command);
+
+                                await SendShutdownNoticeAsync(
+                                    writer,
+                                    machineId);
+
+                                return;
+                            }
+
+                            WorkstationCommandExecutor
+                                .Execute(
+                                    command.Command);
+
+                            continue;
+                        }
+
                         throw new IOException(
-                            "Heartbeat response "
-                            + "không hợp lệ.");
+                            "Phản hồi từ máy tính tiền không hợp lệ.");
                     }
 
                     await Task.Delay(
@@ -236,25 +300,16 @@ public sealed class TcpBillingClient :
                 {
                     try
                     {
-                        var shutdown =
-                            new ClientShutdownPayload(
-                                machineId,
-                                DateTime.UtcNow);
-
-                        string shutdownMessage =
-                            ProtocolJson.Serialize(
-                                MessageTypes
-                                    .ClientShutdown,
-                                shutdown);
-
-                        await writer
-                            .WriteLineAsync(
-                                shutdownMessage);
+                        await SendShutdownNoticeAsync(
+                            writer,
+                            machineId);
                     }
                     catch
                     {
-                        // Máy đang đóng nên không
-                        // để lỗi gửi shutdown cản lại.
+                        /*
+                         * Máy đang đóng nên không để lỗi
+                         * thông báo shutdown cản lại.
+                         */
                     }
                 }
 
@@ -314,6 +369,26 @@ public sealed class TcpBillingClient :
             throw new IOException(
                 "Heartbeat timeout.");
         }
+    }
+
+    private static async Task
+        SendShutdownNoticeAsync(
+            StreamWriter writer,
+            string machineId)
+    {
+        var shutdown =
+            new ClientShutdownPayload(
+                machineId,
+                DateTime.UtcNow);
+
+        string shutdownMessage =
+            ProtocolJson.Serialize(
+                MessageTypes.ClientShutdown,
+                shutdown);
+
+        await writer
+            .WriteLineAsync(
+                shutdownMessage);
     }
 
     private void RaiseStateChanged(
