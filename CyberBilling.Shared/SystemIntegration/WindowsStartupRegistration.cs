@@ -12,6 +12,11 @@ public static class WindowsStartupRegistration
         string startupName,
         string expectedExecutableFileName)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
         try
         {
             string? processPath =
