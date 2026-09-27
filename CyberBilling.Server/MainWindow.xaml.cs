@@ -643,7 +643,7 @@ public partial class MainWindow :
 
         try
         {
-            CompleteSessions(
+            CompletePrepaidSession(
                 row);
         }
         catch (Exception ex)
@@ -768,17 +768,51 @@ public partial class MainWindow :
 
         try
         {
+            DateTime calculatedAt =
+                dialog.CalculatedAt;
+
+            List<SessionSettlement>
+                settlements =
+                    new();
+
+            List<WorkstationRow>
+                completedRows =
+                    new();
+
+            settlements.Add(
+                CreateSettlement(
+                    row,
+                    dialog.PrimaryUsageAmount,
+                    calculatedAt));
+
+            completedRows.Add(
+                row);
+
             if (dialog.LinkedMachine
                 is not null)
             {
-                CompleteSessions(
-                    row,
+                settlements.Add(
+                    CreateSettlement(
+                        dialog.LinkedMachine,
+                        dialog.LinkedUsageAmount,
+                        calculatedAt));
+
+                completedRows.Add(
                     dialog.LinkedMachine);
             }
-            else
+
+            _database.CompletePayment(
+                settlements,
+                dialog.CalculatedAmount,
+                dialog.PayableAmount,
+                DateTime.Now);
+
+            foreach (WorkstationRow
+                     completedRow
+                     in completedRows)
             {
-                CompleteSessions(
-                    row);
+                ClearSessionState(
+                    completedRow);
             }
         }
         catch (Exception ex)
@@ -954,36 +988,6 @@ public partial class MainWindow :
         row.StartDateText =
             now.ToString(
                 "dd/MM/yyyy");
-    }
-
-    private void CompleteSessions(
-        params WorkstationRow[] rows)
-    {
-        long[] sessionIds =
-            rows
-                .Where(
-                    row =>
-                        row.ActiveSessionId
-                            .HasValue)
-                .Select(
-                    row =>
-                        row.ActiveSessionId!
-                            .Value)
-                .ToArray();
-
-        /*
-         * DB hoàn tất trước.
-         * Nếu DB lỗi thì UI chưa bị reset.
-         */
-        _database.MarkSessionsPaid(
-            sessionIds);
-
-        foreach (WorkstationRow row
-                 in rows)
-        {
-            ClearSessionState(
-                row);
-        }
     }
 
     private static void ClearSessionState(
@@ -1353,5 +1357,126 @@ public partial class MainWindow :
 
         row.SessionPausedAt =
             null;
+    }
+
+    private void CompletePrepaidSession(
+        WorkstationRow row)
+    {
+        if (!row.ActiveSessionId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "Không tìm thấy phiên trả trước.");
+        }
+
+        DateTime now =
+            DateTime.Now;
+
+        TimeSpan elapsed =
+            row.GetBillableElapsed(
+                now);
+
+        long billableSeconds =
+            Math.Max(
+                0,
+                (long)Math.Floor(
+                    elapsed.TotalSeconds));
+
+        /*
+         * Trả trước:
+         * tiền giờ chính là số tiền khách
+         * đã nạp từ đầu.
+         */
+        decimal usageAmount =
+            row.PrepaidAmount;
+
+        decimal calculatedAmount =
+            usageAmount
+            + row.ServiceAmount;
+
+        decimal paidAmount =
+            BillingCalculator
+                .RoundPayableAmount(
+                    calculatedAmount);
+
+        var settlement =
+            new SessionSettlement(
+                row.ActiveSessionId.Value,
+                billableSeconds,
+                usageAmount,
+                row.ServiceAmount);
+
+        _database.CompletePayment(
+            new[]
+            {
+            settlement
+            },
+            calculatedAmount,
+            paidAmount,
+            now);
+
+        ClearSessionState(
+            row);
+    }
+
+    private static SessionSettlement
+    CreateSettlement(
+        WorkstationRow row,
+        decimal usageAmount,
+        DateTime calculatedAt)
+    {
+        if (!row.ActiveSessionId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "Không tìm thấy phiên đang hoạt động.");
+        }
+
+        TimeSpan elapsed =
+            row.GetBillableElapsed(
+                calculatedAt);
+
+        long billableSeconds =
+            Math.Max(
+                0,
+                (long)Math.Floor(
+                    elapsed.TotalSeconds));
+
+        return new SessionSettlement(
+            row.ActiveSessionId.Value,
+            billableSeconds,
+            usageAmount,
+            row.ServiceAmount);
+    }
+
+    private void PaymentHistoryButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        try
+        {
+            IReadOnlyList<
+                PaymentHistorySnapshot>
+                history =
+                    _database
+                        .LoadPaymentHistory();
+
+            var window =
+                new PaymentHistoryWindow(
+                    history)
+                {
+                    Owner =
+                        this
+                };
+
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "Không thể đọc lịch sử thanh toán.\n\n"
+                + ex.Message,
+                "CyberBilling",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 }

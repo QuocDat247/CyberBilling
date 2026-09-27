@@ -79,6 +79,36 @@ public partial class BillingDialog :
         private set;
     }
 
+    public decimal PrimaryUsageAmount
+    {
+        get;
+        private set;
+    }
+
+    public decimal LinkedUsageAmount
+    {
+        get;
+        private set;
+    }
+
+    public decimal CalculatedAmount
+    {
+        get;
+        private set;
+    }
+
+    public decimal PayableAmount
+    {
+        get;
+        private set;
+    }
+
+    public DateTime CalculatedAt
+    {
+        get;
+        private set;
+    }
+
     private void
         LinkedMachineComboBox_SelectionChanged(
             object sender,
@@ -105,6 +135,9 @@ public partial class BillingDialog :
         DateTime now =
             DateTime.Now;
 
+        CalculatedAt =
+            now;
+
         MachineNameText.Text =
             $"{_primaryMachine.WorkstationNumberText}"
             + " - "
@@ -114,6 +147,9 @@ public partial class BillingDialog :
             CalculateMachineUsage(
                 _primaryMachine,
                 now);
+
+        PrimaryUsageAmount =
+            primaryUsage;
 
         UsedTimeText.Text =
             GetUsedTime(
@@ -159,16 +195,25 @@ public partial class BillingDialog :
                 .FormatMoney(
                     linkedServices);
 
+        LinkedUsageAmount =
+            linkedUsage;
+
         decimal calculated =
             primaryUsage
             + _primaryMachine.ServiceAmount
             + linkedUsage
             + linkedServices;
 
+        CalculatedAmount =
+            calculated;
+
         decimal payable =
             BillingCalculator
                 .RoundPayableAmount(
                     calculated);
+
+        PayableAmount =
+            payable;
 
         CalculatedAmountText.Text =
             BillingCalculator
@@ -226,6 +271,8 @@ public partial class BillingDialog :
         object sender,
         RoutedEventArgs e)
     {
+        RefreshValues();
+
         Result =
             BillingDialogResult.Pay;
 
@@ -237,6 +284,8 @@ public partial class BillingDialog :
         object sender,
         RoutedEventArgs e)
     {
+        RefreshValues();
+
         Result =
             BillingDialogResult
                 .PayAndShutdown;

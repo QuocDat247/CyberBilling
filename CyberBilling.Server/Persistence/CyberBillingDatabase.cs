@@ -84,11 +84,22 @@ public sealed class CyberBillingDatabase
                 HourlyRate INTEGER NOT NULL,
                 PrepaidAmount INTEGER NOT NULL DEFAULT 0,
                 ServiceAmount INTEGER NOT NULL DEFAULT 0,
+                PaymentId INTEGER NULL,
+                BillableSeconds INTEGER NOT NULL DEFAULT 0,
+                UsageAmount INTEGER NOT NULL DEFAULT 0,
                 PausedAtUtc TEXT NULL,
                 AccumulatedPausedSeconds INTEGER NOT NULL DEFAULT 0,
                 Status TEXT NOT NULL,
                 EndedAtUtc TEXT NULL,
                 PaidAtUtc TEXT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS Payments
+            (
+                Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                PaidAtUtc TEXT NOT NULL,
+                CalculatedAmount INTEGER NOT NULL,
+                PaidAmount INTEGER NOT NULL
             );
 
             CREATE UNIQUE INDEX IF NOT EXISTS
@@ -112,6 +123,8 @@ public sealed class CyberBillingDatabase
 
         command.ExecuteNonQuery();
         EnsurePauseColumns(
+            connection);
+        EnsurePaymentColumns(
             connection);
     }
 
@@ -325,8 +338,6 @@ public sealed class CyberBillingDatabase
             FROM Sessions
             WHERE Status = 'Active'
             ORDER BY Id;
-            WHERE Status = 'Active'
-            ORDER BY Id;
             """;
 
         using SqliteDataReader reader =
@@ -436,6 +447,246 @@ public sealed class CyberBillingDatabase
         return Convert.ToInt64(
             result,
             CultureInfo.InvariantCulture);
+    }
+
+    public long CompletePayment(
+    IEnumerable<SessionSettlement>
+        settlements,
+    decimal calculatedAmount,
+    decimal paidAmount,
+    DateTime paidAt)
+    {
+        SessionSettlement[] items =
+            settlements.ToArray();
+
+        if (items.Length == 0)
+        {
+            throw new InvalidOperationException(
+                "Không có phiên nào để thanh toán.");
+        }
+
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteTransaction transaction =
+            connection.BeginTransaction();
+
+        long paymentId;
+
+        using (SqliteCommand command =
+               connection.CreateCommand())
+        {
+            command.Transaction =
+                transaction;
+
+            command.CommandText =
+                """
+            INSERT INTO Payments
+            (
+                PaidAtUtc,
+                CalculatedAmount,
+                PaidAmount
+            )
+            VALUES
+            (
+                $paidAtUtc,
+                $calculatedAmount,
+                $paidAmount
+            );
+            """;
+
+            command.Parameters.AddWithValue(
+                "$paidAtUtc",
+                ToDatabaseDateTime(
+                    paidAt));
+
+            command.Parameters.AddWithValue(
+                "$calculatedAmount",
+                DecimalToInteger(
+                    calculatedAmount));
+
+            command.Parameters.AddWithValue(
+                "$paidAmount",
+                DecimalToInteger(
+                    paidAmount));
+
+            command.ExecuteNonQuery();
+        }
+
+        using (SqliteCommand command =
+               connection.CreateCommand())
+        {
+            command.Transaction =
+                transaction;
+
+            command.CommandText =
+                "SELECT last_insert_rowid();";
+
+            paymentId =
+                Convert.ToInt64(
+                    command.ExecuteScalar(),
+                    CultureInfo.InvariantCulture);
+        }
+
+        string paidAtText =
+            ToDatabaseDateTime(
+                paidAt);
+
+        foreach (SessionSettlement item
+                 in items)
+        {
+            using SqliteCommand command =
+                connection.CreateCommand();
+
+            command.Transaction =
+                transaction;
+
+            command.CommandText =
+                """
+            UPDATE Sessions
+            SET
+                Status = 'Paid',
+                PaymentId = $paymentId,
+                EndedAtUtc = $endedAtUtc,
+                PaidAtUtc = $paidAtUtc,
+                BillableSeconds = $billableSeconds,
+                UsageAmount = $usageAmount,
+                ServiceAmount = $serviceAmount
+            WHERE
+                Id = $sessionId
+                AND Status = 'Active';
+            """;
+
+            command.Parameters.AddWithValue(
+                "$paymentId",
+                paymentId);
+
+            command.Parameters.AddWithValue(
+                "$endedAtUtc",
+                paidAtText);
+
+            command.Parameters.AddWithValue(
+                "$paidAtUtc",
+                paidAtText);
+
+            command.Parameters.AddWithValue(
+                "$billableSeconds",
+                item.BillableSeconds);
+
+            command.Parameters.AddWithValue(
+                "$usageAmount",
+                DecimalToInteger(
+                    item.UsageAmount));
+
+            command.Parameters.AddWithValue(
+                "$serviceAmount",
+                DecimalToInteger(
+                    item.ServiceAmount));
+
+            command.Parameters.AddWithValue(
+                "$sessionId",
+                item.SessionId);
+
+            command.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+
+        return paymentId;
+    }
+
+    public IReadOnlyList<PaymentHistorySnapshot>
+    LoadPaymentHistory()
+    {
+        List<PaymentHistorySnapshot> result =
+            new();
+
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+        SELECT
+            p.Id,
+
+            GROUP_CONCAT(
+                CASE
+                    WHEN w.WorkstationNumber IS NULL
+                        THEN s.MachineId
+                    ELSE printf(
+                        '%02d - %s',
+                        w.WorkstationNumber,
+                        w.MachineName)
+                END,
+                ' + '
+            ),
+
+            GROUP_CONCAT(
+                CASE s.Mode
+                    WHEN 1 THEN 'Trả sau'
+                    WHEN 2 THEN 'Trả trước'
+                    ELSE 'Khác'
+                END,
+                ' + '
+            ),
+
+            MIN(s.StartedAtUtc),
+            MAX(s.EndedAtUtc),
+
+            SUM(s.BillableSeconds),
+            SUM(s.UsageAmount),
+            SUM(s.ServiceAmount),
+
+            p.CalculatedAmount,
+            p.PaidAmount,
+            p.PaidAtUtc
+
+        FROM Payments p
+
+        INNER JOIN Sessions s
+            ON s.PaymentId = p.Id
+
+        LEFT JOIN Workstations w
+            ON w.MachineId = s.MachineId
+
+        GROUP BY
+            p.Id,
+            p.CalculatedAmount,
+            p.PaidAmount,
+            p.PaidAtUtc
+
+        ORDER BY p.Id DESC
+
+        LIMIT 500;
+        """;
+
+        using SqliteDataReader reader =
+            command.ExecuteReader();
+
+        while (reader.Read())
+        {
+            result.Add(
+                new PaymentHistorySnapshot(
+                    reader.GetInt64(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    FromDatabaseDateTime(
+                        reader.GetString(3)),
+                    FromDatabaseDateTime(
+                        reader.GetString(4)),
+                    reader.GetInt64(5),
+                    reader.GetInt64(6),
+                    reader.GetInt64(7),
+                    reader.GetInt64(8),
+                    reader.GetInt64(9),
+                    FromDatabaseDateTime(
+                        reader.GetString(10))));
+        }
+
+        return result;
     }
 
     public void MarkSessionsPaid(
@@ -663,6 +914,78 @@ public sealed class CyberBillingDatabase
 
         command.ExecuteNonQuery();
     }
+
+    private static void EnsurePaymentColumns(
+    SqliteConnection connection)
+    {
+        HashSet<string> columns =
+            new(
+                StringComparer
+                    .OrdinalIgnoreCase);
+
+        using (SqliteCommand command =
+               connection.CreateCommand())
+        {
+            command.CommandText =
+                "PRAGMA table_info(Sessions);";
+
+            using SqliteDataReader reader =
+                command.ExecuteReader();
+
+            while (reader.Read())
+            {
+                columns.Add(
+                    reader.GetString(1));
+            }
+        }
+
+        if (!columns.Contains(
+                "PaymentId"))
+        {
+            using SqliteCommand command =
+                connection.CreateCommand();
+
+            command.CommandText =
+                """
+            ALTER TABLE Sessions
+            ADD COLUMN PaymentId INTEGER NULL;
+            """;
+
+            command.ExecuteNonQuery();
+        }
+
+        if (!columns.Contains(
+                "BillableSeconds"))
+        {
+            using SqliteCommand command =
+                connection.CreateCommand();
+
+            command.CommandText =
+                """
+            ALTER TABLE Sessions
+            ADD COLUMN BillableSeconds
+                INTEGER NOT NULL DEFAULT 0;
+            """;
+
+            command.ExecuteNonQuery();
+        }
+
+        if (!columns.Contains(
+                "UsageAmount"))
+        {
+            using SqliteCommand command =
+                connection.CreateCommand();
+
+            command.CommandText =
+                """
+            ALTER TABLE Sessions
+            ADD COLUMN UsageAmount
+                INTEGER NOT NULL DEFAULT 0;
+            """;
+
+            command.ExecuteNonQuery();
+        }
+    }
 }
 
 public sealed record BillingSettingsSnapshot(
@@ -684,3 +1007,22 @@ public sealed record ActiveSessionSnapshot(
     decimal ServiceAmount,
     DateTime? PausedAt,
     long AccumulatedPausedSeconds);
+
+public sealed record SessionSettlement(
+    long SessionId,
+    long BillableSeconds,
+    decimal UsageAmount,
+    decimal ServiceAmount);
+
+public sealed record PaymentHistorySnapshot(
+    long PaymentId,
+    string Machines,
+    string Modes,
+    DateTime StartedAt,
+    DateTime EndedAt,
+    long BillableSeconds,
+    decimal UsageAmount,
+    decimal ServiceAmount,
+    decimal CalculatedAmount,
+    decimal PaidAmount,
+    DateTime PaidAt);
