@@ -7,7 +7,7 @@
         MinWidth="1100"
         MinHeight="500"
         WindowStartupLocation="CenterOwner"
-        Background="#101827">
+        Background="#F3F5F7">
 
     <Grid Margin="22">
 
@@ -27,28 +27,28 @@
             <StackPanel>
 
                 <TextBlock Text="LỊCH SỬ THANH TOÁN"
-                           Foreground="White"
+                           Foreground="#1F2937"
                            FontSize="24"
                            FontWeight="SemiBold"/>
 
                 <TextBlock Text="Tối đa 500 giao dịch gần nhất"
                            Margin="0,5,0,0"
-                           Foreground="#9FB3CE"/>
+                           Foreground="#667085"/>
 
             </StackPanel>
 
             <TextBlock x:Name="SummaryText"
                        Grid.Column="1"
                        VerticalAlignment="Center"
-                       Foreground="#7BE3A8"
+                       Foreground="#15803D"
                        FontSize="15"
                        FontWeight="SemiBold"/>
 
         </Grid>
 
         <Border Grid.Row="2"
-                Background="#162033"
-                BorderBrush="#2B3A52"
+                Background="#FFFFFF"
+                BorderBrush="#D8DEE8"
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="10">
@@ -60,9 +60,9 @@
                       CanUserDeleteRows="False"
                       HeadersVisibility="Column"
                       GridLinesVisibility="Horizontal"
-                      HorizontalGridLinesBrush="#2B3A52"
-                      Background="#162033"
-                      Foreground="White"
+                      HorizontalGridLinesBrush="#D8DEE8"
+                      Background="#FFFFFF"
+                      Foreground="#1F2937"
                       RowHeight="42"
                       ColumnHeaderHeight="40"
                       BorderThickness="0">
@@ -71,9 +71,9 @@
 
                     <Style TargetType="DataGridColumnHeader">
                         <Setter Property="Background"
-                                Value="#1D2A40"/>
+                                Value="#F8FAFC"/>
                         <Setter Property="Foreground"
-                                Value="#DCE7F7"/>
+                                Value="#344054"/>
                         <Setter Property="FontWeight"
                                 Value="SemiBold"/>
                         <Setter Property="Padding"
@@ -82,9 +82,9 @@
 
                     <Style TargetType="DataGridRow">
                         <Setter Property="Background"
-                                Value="#162033"/>
+                                Value="#FFFFFF"/>
                         <Setter Property="Foreground"
-                                Value="#E8EEF8"/>
+                                Value="#1F2937"/>
                     </Style>
 
                     <Style TargetType="DataGridCell">

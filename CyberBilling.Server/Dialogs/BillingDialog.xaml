@@ -6,27 +6,27 @@
         Height="690"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
-        Background="#101827">
+        Background="#F3F5F7">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
 
         <StackPanel Margin="24">
 
             <TextBlock Text="TÍNH TIỀN"
-                       Foreground="White"
+                       Foreground="#1F2937"
                        FontSize="24"
                        FontWeight="SemiBold"/>
 
             <TextBlock x:Name="MachineNameText"
                        Margin="0,5,0,20"
-                       Foreground="#7FB0FF"
+                       Foreground="#2563EB"
                        FontSize="18"
                        FontWeight="SemiBold"/>
 
             <!-- MÁY HIỆN TẠI -->
 
-            <Border Background="#162033"
-                    BorderBrush="#2B3A52"
+            <Border Background="#FFFFFF"
+                    BorderBrush="#D8DEE8"
                     BorderThickness="1"
                     CornerRadius="8"
                     Padding="16">
@@ -34,7 +34,7 @@
                 <StackPanel>
 
                     <TextBlock Text="Sử dụng"
-                               Foreground="White"
+                               Foreground="#1F2937"
                                FontWeight="SemiBold"
                                FontSize="16"
                                Margin="0,0,0,12"/>
@@ -53,31 +53,31 @@
                         </Grid.RowDefinitions>
 
                         <TextBlock Text="Thời gian:"
-                                   Foreground="#9FB3CE"/>
+                                   Foreground="#667085"/>
 
                         <TextBlock x:Name="UsedTimeText"
                                    Grid.Column="1"
-                                   Foreground="White"
+                                   Foreground="#1F2937"
                                    FontWeight="SemiBold"/>
 
                         <TextBlock Grid.Row="1"
                                    Text="Thời gian phí:"
-                                   Foreground="#9FB3CE"/>
+                                   Foreground="#667085"/>
 
                         <TextBlock x:Name="UsageAmountText"
                                    Grid.Row="1"
                                    Grid.Column="1"
-                                   Foreground="White"
+                                   Foreground="#1F2937"
                                    FontWeight="SemiBold"/>
 
                         <TextBlock Grid.Row="2"
                                    Text="Dịch vụ phí:"
-                                   Foreground="#9FB3CE"/>
+                                   Foreground="#667085"/>
 
                         <TextBlock x:Name="ServiceAmountText"
                                    Grid.Row="2"
                                    Grid.Column="1"
-                                   Foreground="White"
+                                   Foreground="#1F2937"
                                    FontWeight="SemiBold"/>
 
                     </Grid>
@@ -89,8 +89,8 @@
             <!-- THANH TOÁN KÈM -->
 
             <Border Margin="0,14,0,0"
-                    Background="#162033"
-                    BorderBrush="#2B3A52"
+                    Background="#FFFFFF"
+                    BorderBrush="#D8DEE8"
                     BorderThickness="1"
                     CornerRadius="8"
                     Padding="16">
@@ -98,7 +98,7 @@
                 <StackPanel>
 
                     <TextBlock Text="Thanh toán thêm cho máy khác"
-                               Foreground="White"
+                               Foreground="#1F2937"
                                FontSize="16"
                                FontWeight="SemiBold"/>
 
@@ -120,21 +120,21 @@
                         </Grid.RowDefinitions>
 
                         <TextBlock Text="Thời gian phí:"
-                                   Foreground="#9FB3CE"/>
+                                   Foreground="#667085"/>
 
                         <TextBlock x:Name="LinkedUsageAmountText"
                                    Grid.Column="1"
-                                   Foreground="White"
+                                   Foreground="#1F2937"
                                    FontWeight="SemiBold"/>
 
                         <TextBlock Grid.Row="1"
                                    Text="Dịch vụ phí:"
-                                   Foreground="#9FB3CE"/>
+                                   Foreground="#667085"/>
 
                         <TextBlock x:Name="LinkedServiceAmountText"
                                    Grid.Row="1"
                                    Grid.Column="1"
-                                   Foreground="White"
+                                   Foreground="#1F2937"
                                    FontWeight="SemiBold"/>
 
                     </Grid>
@@ -146,8 +146,8 @@
             <!-- TỔNG -->
 
             <Border Margin="0,14,0,0"
-                    Background="#162033"
-                    BorderBrush="#2B3A52"
+                    Background="#FFFFFF"
+                    BorderBrush="#D8DEE8"
                     BorderThickness="1"
                     CornerRadius="8"
                     Padding="16">
@@ -155,7 +155,7 @@
                 <StackPanel>
 
                     <TextBlock Text="Tổng cộng"
-                               Foreground="White"
+                               Foreground="#1F2937"
                                FontSize="16"
                                FontWeight="SemiBold"/>
 
@@ -172,21 +172,21 @@
                         </Grid.RowDefinitions>
 
                         <TextBlock Text="Số tiền máy tính:"
-                                   Foreground="#9FB3CE"/>
+                                   Foreground="#667085"/>
 
                         <TextBlock x:Name="CalculatedAmountText"
                                    Grid.Column="1"
-                                   Foreground="White"
+                                   Foreground="#1F2937"
                                    FontWeight="SemiBold"/>
 
                         <TextBlock Grid.Row="1"
                                    Text="Số tiền thực thu:"
-                                   Foreground="#9FB3CE"/>
+                                   Foreground="#667085"/>
 
                         <TextBlock x:Name="PayableAmountText"
                                    Grid.Row="1"
                                    Grid.Column="1"
-                                   Foreground="#7BE3A8"
+                                   Foreground="#15803D"
                                    FontWeight="Bold"
                                    FontSize="18"/>
 
@@ -195,7 +195,7 @@
                     <TextBlock x:Name="LargePayableAmountText"
                                Margin="0,15,0,0"
                                TextAlignment="Center"
-                               Foreground="#75A7FF"
+                               Foreground="#2563EB"
                                FontSize="42"
                                FontWeight="SemiBold"/>
 

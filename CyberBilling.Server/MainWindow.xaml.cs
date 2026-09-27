@@ -1479,4 +1479,31 @@ public partial class MainWindow :
                 MessageBoxImage.Error);
         }
     }
+
+    private void ServiceManagementButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        try
+        {
+            var window =
+                new ServiceManagementWindow(
+                    _database)
+                {
+                    Owner =
+                        this
+                };
+
+            window.ShowDialog();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "Không thể mở quản lý dịch vụ.\n\n"
+                + ex.Message,
+                "CyberBilling",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
 }

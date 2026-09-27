@@ -7,7 +7,7 @@
         MinHeight="520"
         MinWidth="1050"
         WindowStartupLocation="CenterScreen"
-        Background="#101827">
+        Background="#F3F5F7">
 
     <Grid Margin="24">
 
@@ -19,8 +19,8 @@
 
         <!-- HEADER -->
         <Border Padding="18"
-                Background="#162033"
-                BorderBrush="#2B3A52"
+                Background="#FFFFFF"
+                BorderBrush="#D8DEE8"
                 BorderThickness="1"
                 CornerRadius="8">
 
@@ -36,14 +36,14 @@
                 <StackPanel>
 
                     <TextBlock Text="CyberBilling Server"
-                               Foreground="White"
+                               Foreground="#1F2937"
                                FontSize="24"
                                FontWeight="SemiBold"/>
 
                     <TextBlock x:Name="ServerStatusText"
                                Margin="0,7,0,0"
                                Text="Đang khởi động..."
-                               Foreground="#9FB3CE"
+                               Foreground="#667085"
                                FontSize="14"/>
 
                 </StackPanel>
@@ -53,7 +53,7 @@
                             VerticalAlignment="Center">
 
                     <TextBlock Text="Giá giờ:"
-                               Foreground="#9FB3CE"
+                               Foreground="#667085"
                                VerticalAlignment="Center"
                                Margin="0,0,8,0"/>
 
@@ -66,12 +66,12 @@
                              VerticalContentAlignment="Center"/>
 
                     <TextBlock Text="đ"
-                               Foreground="#9FB3CE"
+                               Foreground="#667085"
                                VerticalAlignment="Center"
                                Margin="6,0,14,0"/>
 
                     <TextBlock Text="Tối thiểu:"
-                               Foreground="#9FB3CE"
+                               Foreground="#667085"
                                VerticalAlignment="Center"
                                Margin="0,0,8,0"/>
 
@@ -84,7 +84,7 @@
                              VerticalContentAlignment="Center"/>
 
                     <TextBlock Text="đ"
-                               Foreground="#9FB3CE"
+                               Foreground="#667085"
                                VerticalAlignment="Center"
                                Margin="6,0,12,0"/>
 
@@ -100,17 +100,23 @@
                             Content="Lịch sử"
                             Click="PaymentHistoryButton_Click"/>
 
+                    <Button Width="90"
+                            Height="34"
+                            Margin="10,0,0,0"
+                            Content="Dịch vụ"
+                            Click="ServiceManagementButton_Click"/>
+
                 </StackPanel>
 
                 <Border Grid.Column="3"
                         VerticalAlignment="Center"
-                        Background="#173E2B"
+                        Background="#EAF7EE"
                         Padding="12,7"
                         CornerRadius="6">
 
                     <TextBlock x:Name="ListeningText"
                                Text="PORT 5055"
-                               Foreground="#7BE3A8"
+                               Foreground="#15803D"
                                FontWeight="SemiBold"/>
 
                 </Border>
@@ -121,8 +127,8 @@
 
         <!-- WORKSTATION GRID -->
         <Border Grid.Row="2"
-                Background="#162033"
-                BorderBrush="#2B3A52"
+                Background="#FFFFFF"
+                BorderBrush="#D8DEE8"
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="12">
@@ -137,11 +143,11 @@
                       CanUserResizeRows="False"
                       HeadersVisibility="Column"
                       GridLinesVisibility="Horizontal"
-                      HorizontalGridLinesBrush="#2B3A52"
+                      HorizontalGridLinesBrush="#D8DEE8"
                       RowHeight="46"
                       ColumnHeaderHeight="40"
-                      Background="#162033"
-                      Foreground="White"
+                      Background="#FFFFFF"
+                      Foreground="#1F2937"
                       BorderThickness="0"
                       SelectionMode="Single"
                       SelectionUnit="FullRow">
@@ -171,16 +177,16 @@
                     <Style TargetType="DataGridColumnHeader">
 
                         <Setter Property="Background"
-                                Value="#1D2A40"/>
+                                Value="#F8FAFC"/>
 
                         <Setter Property="Foreground"
-                                Value="#DCE7F7"/>
+                                Value="#344054"/>
 
                         <Setter Property="FontWeight"
                                 Value="SemiBold"/>
 
                         <Setter Property="BorderBrush"
-                                Value="#2B3A52"/>
+                                Value="#D8DEE8"/>
 
                         <Setter Property="BorderThickness"
                                 Value="0,0,1,1"/>
@@ -196,10 +202,10 @@
                     <Style TargetType="DataGridRow">
 
                         <Setter Property="Background"
-                                Value="#162033"/>
+                                Value="#FFFFFF"/>
 
                         <Setter Property="Foreground"
-                                Value="#E8EEF8"/>
+                                Value="#1F2937"/>
 
                         <Setter Property="BorderThickness"
                                 Value="0"/>
@@ -213,7 +219,7 @@
                                      Value="True">
 
                                 <Setter Property="Background"
-                                        Value="#1D2A40"/>
+                                        Value="#F8FAFC"/>
 
                             </Trigger>
 
@@ -221,10 +227,10 @@
                                      Value="True">
 
                                 <Setter Property="Background"
-                                        Value="#254A78"/>
+                                        Value="#DCEAFF"/>
 
                                 <Setter Property="Foreground"
-                                        Value="White"/>
+                                        Value="#1F2937"/>
 
                             </Trigger>
 

@@ -102,6 +102,22 @@ public sealed class CyberBillingDatabase
                 PaidAmount INTEGER NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS Services
+            (
+                Id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                Name TEXT NOT NULL,
+                Category TEXT NOT NULL,
+                Unit TEXT NOT NULL,
+                Price INTEGER NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                CreatedAtUtc TEXT NOT NULL,
+                UpdatedAtUtc TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS
+                IX_Services_Active_Category
+            ON Services(IsActive, Category);
+
             CREATE UNIQUE INDEX IF NOT EXISTS
                 UX_Sessions_ActiveMachine
             ON Sessions(MachineId)
@@ -689,6 +705,214 @@ public sealed class CyberBillingDatabase
         return result;
     }
 
+    public IReadOnlyList<ServiceSnapshot>
+    LoadServices()
+    {
+        List<ServiceSnapshot> result =
+            new();
+
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+        SELECT
+            Id,
+            Name,
+            Category,
+            Unit,
+            Price
+        FROM Services
+        WHERE IsActive = 1
+        ORDER BY
+            Category,
+            Name;
+        """;
+
+        using SqliteDataReader reader =
+            command.ExecuteReader();
+
+        while (reader.Read())
+        {
+            result.Add(
+                new ServiceSnapshot(
+                    reader.GetInt64(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetString(3),
+                    reader.GetInt64(4)));
+        }
+
+        return result;
+    }
+
+    public long AddService(
+        string name,
+        string category,
+        string unit,
+        decimal price)
+    {
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+        INSERT INTO Services
+        (
+            Name,
+            Category,
+            Unit,
+            Price,
+            IsActive,
+            CreatedAtUtc,
+            UpdatedAtUtc
+        )
+        VALUES
+        (
+            $name,
+            $category,
+            $unit,
+            $price,
+            1,
+            $createdAtUtc,
+            $updatedAtUtc
+        );
+        """;
+
+        string now =
+            ToDatabaseDateTime(
+                DateTime.Now);
+
+        command.Parameters.AddWithValue(
+            "$name",
+            name.Trim());
+
+        command.Parameters.AddWithValue(
+            "$category",
+            category);
+
+        command.Parameters.AddWithValue(
+            "$unit",
+            unit.Trim());
+
+        command.Parameters.AddWithValue(
+            "$price",
+            DecimalToInteger(
+                price));
+
+        command.Parameters.AddWithValue(
+            "$createdAtUtc",
+            now);
+
+        command.Parameters.AddWithValue(
+            "$updatedAtUtc",
+            now);
+
+        command.ExecuteNonQuery();
+
+        using SqliteCommand idCommand =
+            connection.CreateCommand();
+
+        idCommand.CommandText =
+            "SELECT last_insert_rowid();";
+
+        return Convert.ToInt64(
+            idCommand.ExecuteScalar(),
+            CultureInfo.InvariantCulture);
+    }
+
+    public void UpdateService(
+        long id,
+        string name,
+        string category,
+        string unit,
+        decimal price)
+    {
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+        UPDATE Services
+        SET
+            Name = $name,
+            Category = $category,
+            Unit = $unit,
+            Price = $price,
+            UpdatedAtUtc = $updatedAtUtc
+        WHERE
+            Id = $id
+            AND IsActive = 1;
+        """;
+
+        command.Parameters.AddWithValue(
+            "$name",
+            name.Trim());
+
+        command.Parameters.AddWithValue(
+            "$category",
+            category);
+
+        command.Parameters.AddWithValue(
+            "$unit",
+            unit.Trim());
+
+        command.Parameters.AddWithValue(
+            "$price",
+            DecimalToInteger(
+                price));
+
+        command.Parameters.AddWithValue(
+            "$updatedAtUtc",
+            ToDatabaseDateTime(
+                DateTime.Now));
+
+        command.Parameters.AddWithValue(
+            "$id",
+            id);
+
+        command.ExecuteNonQuery();
+    }
+
+    public void DeleteService(
+        long id)
+    {
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+        UPDATE Services
+        SET
+            IsActive = 0,
+            UpdatedAtUtc = $updatedAtUtc
+        WHERE Id = $id;
+        """;
+
+        command.Parameters.AddWithValue(
+            "$updatedAtUtc",
+            ToDatabaseDateTime(
+                DateTime.Now));
+
+        command.Parameters.AddWithValue(
+            "$id",
+            id);
+
+        command.ExecuteNonQuery();
+    }
+
     public void MarkSessionsPaid(
         IEnumerable<long> sessionIds)
     {
@@ -1026,3 +1250,10 @@ public sealed record PaymentHistorySnapshot(
     decimal CalculatedAmount,
     decimal PaidAmount,
     DateTime PaidAt);
+
+public sealed record ServiceSnapshot(
+    long Id,
+    string Name,
+    string Category,
+    string Unit,
+    decimal Price);

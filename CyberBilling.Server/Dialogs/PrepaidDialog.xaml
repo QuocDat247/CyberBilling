@@ -6,7 +6,7 @@
         Height="479"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner"
-        Background="#101827">
+        Background="#F3F5F7">
 
     <Grid Margin="28">
 
@@ -25,13 +25,13 @@
         <StackPanel>
 
             <TextBlock Text="TRẢ TIỀN TRƯỚC"
-                       Foreground="White"
+                       Foreground="#1F2937"
                        FontSize="23"
                        FontWeight="SemiBold"/>
 
             <TextBlock x:Name="MachineText"
                        Margin="0,6,0,0"
-                       Foreground="#7FB0FF"
+                       Foreground="#2563EB"
                        FontSize="16"/>
 
         </StackPanel>
@@ -39,7 +39,7 @@
         <StackPanel Grid.Row="2">
 
             <TextBlock Text="Số tiền khách trả"
-                       Foreground="#DCE7F7"
+                       Foreground="#344054"
                        FontWeight="SemiBold"/>
 
             <TextBox x:Name="AmountTextBox"
@@ -53,24 +53,24 @@
 
         <TextBlock Grid.Row="4"
                    x:Name="HourlyRateText"
-                   Foreground="#9FB3CE"/>
+                   Foreground="#667085"/>
 
         <Border Grid.Row="6"
                 Padding="16"
-                Background="#162033"
-                BorderBrush="#2B3A52"
+                Background="#FFFFFF"
+                BorderBrush="#D8DEE8"
                 BorderThickness="1"
                 CornerRadius="8">
 
             <StackPanel>
 
                 <TextBlock Text="Thời gian được chơi"
-                           Foreground="#9FB3CE"/>
+                           Foreground="#667085"/>
 
                 <TextBlock x:Name="DurationText"
                            Margin="0,6,0,0"
                            Text="--:--:--"
-                           Foreground="#7BE3A8"
+                           Foreground="#15803D"
                            FontSize="30"
                            FontWeight="SemiBold"/>
 

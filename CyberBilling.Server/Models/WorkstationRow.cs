@@ -229,11 +229,19 @@ public sealed class WorkstationRow :
                 value;
 
             OnPropertyChanged();
+
+            OnPropertyChanged(
+                nameof(
+                    MachineNameForeground));
         }
     }
 
     public Brush MachineNameForeground =>
-        Brushes.White;
+        ReferenceEquals(
+            _machineNameBackground,
+            Brushes.Transparent)
+                ? Brushes.Black
+                : Brushes.White;
 
     /*
      * PHẦN PHIÊN CHƠI.
