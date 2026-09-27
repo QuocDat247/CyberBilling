@@ -1,7 +1,7 @@
 ﻿<Window x:Class="CyberBilling.Server.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="CyberBilling Server"
+        Title="CyberBilling - Máy tính tiền"
         Height="650"
         Width="1250"
         MinHeight="520"
@@ -35,7 +35,7 @@
 
                 <StackPanel>
 
-                    <TextBlock Text="CyberBilling Server"
+                    <TextBlock Text="CyberBilling - Máy tính tiền"
                                Foreground="#1F2937"
                                FontSize="24"
                                FontWeight="SemiBold"/>
@@ -115,7 +115,7 @@
                         CornerRadius="6">
 
                     <TextBlock x:Name="ListeningText"
-                               Text="PORT 5055"
+                               Text="CỔNG 5055"
                                Foreground="#15803D"
                                FontWeight="SemiBold"/>
 
@@ -167,6 +167,10 @@
                         <MenuItem x:Name="BillPostpaidMenuItem"
                                   Header="Tính tiền"
                                   Click="BillPostpaidMenuItem_Click"/>
+
+                        <MenuItem x:Name="ServiceMenuItem"
+                                  Header="Dịch vụ"
+                                  Click="ServiceMenuItem_Click"/>
 
                     </ContextMenu>
 

@@ -114,6 +114,23 @@ public sealed class CyberBillingDatabase
                 UpdatedAtUtc TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS SessionServices
+            (
+                SessionId INTEGER NOT NULL,
+                ServiceId INTEGER NOT NULL,
+                Quantity INTEGER NOT NULL DEFAULT 1,
+
+                PRIMARY KEY
+                (
+                    SessionId,
+                    ServiceId
+                )
+            );
+
+            CREATE INDEX IF NOT EXISTS
+                IX_SessionServices_SessionId
+            ON SessionServices(SessionId);
+
             CREATE INDEX IF NOT EXISTS
                 IX_Services_Active_Category
             ON Services(IsActive, Category);
@@ -279,6 +296,218 @@ public sealed class CyberBillingDatabase
         }
 
         return result;
+    }
+
+    public IReadOnlyList<SessionServiceSnapshot>
+    LoadSessionServices(
+        long sessionId)
+    {
+        List<SessionServiceSnapshot> result =
+            new();
+
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+        SELECT
+            ss.ServiceId,
+            s.Name,
+            s.Category,
+            s.Unit,
+            s.Price,
+            ss.Quantity
+        FROM SessionServices ss
+
+        INNER JOIN Services s
+            ON s.Id = ss.ServiceId
+
+        WHERE ss.SessionId = $sessionId
+
+        ORDER BY
+            s.Category,
+            s.Name;
+        """;
+
+        command.Parameters.AddWithValue(
+            "$sessionId",
+            sessionId);
+
+        using SqliteDataReader reader =
+            command.ExecuteReader();
+
+        while (reader.Read())
+        {
+            result.Add(
+                new SessionServiceSnapshot(
+                    reader.GetInt64(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.GetString(3),
+                    reader.GetInt64(4),
+                    reader.GetInt32(5)));
+        }
+
+        return result;
+    }
+
+    public decimal SaveSessionServices(
+        long sessionId,
+        IEnumerable<SessionServiceUpdate>
+            services)
+    {
+        SessionServiceUpdate[] items =
+            services
+                .Where(
+                    item =>
+                        item.Quantity > 0)
+                .GroupBy(
+                    item =>
+                        item.ServiceId)
+                .Select(
+                    group =>
+                        new SessionServiceUpdate(
+                            group.Key,
+                            group.Sum(
+                                item =>
+                                    item.Quantity)))
+                .ToArray();
+
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteTransaction transaction =
+            connection.BeginTransaction();
+
+        using (SqliteCommand command =
+               connection.CreateCommand())
+        {
+            command.Transaction =
+                transaction;
+
+            command.CommandText =
+                """
+            DELETE FROM SessionServices
+            WHERE SessionId = $sessionId;
+            """;
+
+            command.Parameters.AddWithValue(
+                "$sessionId",
+                sessionId);
+
+            command.ExecuteNonQuery();
+        }
+
+        foreach (SessionServiceUpdate item
+                 in items)
+        {
+            using SqliteCommand command =
+                connection.CreateCommand();
+
+            command.Transaction =
+                transaction;
+
+            command.CommandText =
+                """
+            INSERT INTO SessionServices
+            (
+                SessionId,
+                ServiceId,
+                Quantity
+            )
+            VALUES
+            (
+                $sessionId,
+                $serviceId,
+                $quantity
+            );
+            """;
+
+            command.Parameters.AddWithValue(
+                "$sessionId",
+                sessionId);
+
+            command.Parameters.AddWithValue(
+                "$serviceId",
+                item.ServiceId);
+
+            command.Parameters.AddWithValue(
+                "$quantity",
+                item.Quantity);
+
+            command.ExecuteNonQuery();
+        }
+
+        decimal serviceAmount;
+
+        using (SqliteCommand command =
+               connection.CreateCommand())
+        {
+            command.Transaction =
+                transaction;
+
+            command.CommandText =
+                """
+            SELECT
+                COALESCE(
+                    SUM(
+                        s.Price
+                        * ss.Quantity),
+                    0)
+            FROM SessionServices ss
+
+            INNER JOIN Services s
+                ON s.Id = ss.ServiceId
+
+            WHERE ss.SessionId = $sessionId;
+            """;
+
+            command.Parameters.AddWithValue(
+                "$sessionId",
+                sessionId);
+
+            object? value =
+                command.ExecuteScalar();
+
+            serviceAmount =
+                Convert.ToDecimal(
+                    value,
+                    CultureInfo.InvariantCulture);
+        }
+
+        using (SqliteCommand command =
+               connection.CreateCommand())
+        {
+            command.Transaction =
+                transaction;
+
+            command.CommandText =
+                """
+            UPDATE Sessions
+            SET ServiceAmount = $serviceAmount
+            WHERE
+                Id = $sessionId
+                AND Status = 'Active';
+            """;
+
+            command.Parameters.AddWithValue(
+                "$serviceAmount",
+                DecimalToInteger(
+                    serviceAmount));
+
+            command.Parameters.AddWithValue(
+                "$sessionId",
+                sessionId);
+
+            command.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+
+        return serviceAmount;
     }
 
     public void UpsertWorkstation(
@@ -1257,3 +1486,15 @@ public sealed record ServiceSnapshot(
     string Category,
     string Unit,
     decimal Price);
+
+public sealed record SessionServiceSnapshot(
+    long ServiceId,
+    string Name,
+    string Category,
+    string Unit,
+    decimal Price,
+    int Quantity);
+
+public sealed record SessionServiceUpdate(
+    long ServiceId,
+    int Quantity);

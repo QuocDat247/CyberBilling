@@ -87,13 +87,13 @@ public partial class MainWindow :
             RefreshServerStatus();
 
             ListeningText.Text =
-                $"ONLINE :{TcpBillingServer.DefaultPort}";
+                $"ĐANG HOẠT ĐỘNG :{TcpBillingServer.DefaultPort}";
         }
         catch (Exception ex)
         {
             MessageBox.Show(
                 ex.ToString(),
-                "Không thể khởi động Server",
+                "Không thể khởi động máy tính tiền",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
 
@@ -372,7 +372,7 @@ public partial class MainWindow :
     private void RefreshServerStatus()
     {
         ServerStatusText.Text =
-            "Port "
+            "Cổng "
             + TcpBillingServer.DefaultPort
             + " | Giá giờ: "
             + BillingCalculator
@@ -498,8 +498,8 @@ public partial class MainWindow :
     }
 
     private void WorkstationContextMenu_Opened(
-        object sender,
-        RoutedEventArgs e)
+    object sender,
+    RoutedEventArgs e)
     {
         bool hasRow =
             WorkstationsGrid.SelectedItem
@@ -514,6 +514,9 @@ public partial class MainWindow :
                 Visibility.Collapsed;
 
             BillPostpaidMenuItem.Visibility =
+                Visibility.Collapsed;
+
+            ServiceMenuItem.Visibility =
                 Visibility.Collapsed;
 
             return;
@@ -541,6 +544,11 @@ public partial class MainWindow :
             row.IsSessionActive
             && row.SessionMode ==
                 SessionBillingMode.Postpaid
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        ServiceMenuItem.Visibility =
+            row.IsSessionActive
                 ? Visibility.Visible
                 : Visibility.Collapsed;
     }
@@ -990,7 +998,7 @@ public partial class MainWindow :
                 "dd/MM/yyyy");
     }
 
-    private static void ClearSessionState(
+    private void ClearSessionState(
         WorkstationRow row)
     {
         row.ActiveSessionId =
@@ -1035,18 +1043,8 @@ public partial class MainWindow :
         row.StartDateText =
             "--";
 
-        if (row.ConnectionState ==
-            WorkstationConnectionState
-                .Online)
-        {
-            row.Status =
-                "Sẵn sàng";
-
-            return;
-        }
-
-        row.Status =
-            "Đã tắt";
+        ApplyConnectionAppearance(
+            row);
     }
 
     private void OnBillingTimerTick(
@@ -1234,8 +1232,20 @@ public partial class MainWindow :
             return;
         }
 
-        row.MachineNameBackground =
-            Brushes.Transparent;
+        if (row.ServiceAmount > 0m)
+        {
+            row.MachineNameBackground =
+                new SolidColorBrush(
+                    Color.FromRgb(
+                        37,
+                        99,
+                        235));
+        }
+        else
+        {
+            row.MachineNameBackground =
+                Brushes.Transparent;
+        }
 
         if (!row.IsSessionActive)
         {
@@ -1500,6 +1510,56 @@ public partial class MainWindow :
         {
             MessageBox.Show(
                 "Không thể mở quản lý dịch vụ.\n\n"
+                + ex.Message,
+                "CyberBilling",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void ServiceMenuItem_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (WorkstationsGrid.SelectedItem
+            is not WorkstationRow row)
+        {
+            return;
+        }
+
+        if (!row.IsSessionActive
+            || !row.ActiveSessionId.HasValue)
+        {
+            MessageBox.Show(
+                "Máy trạm chưa có phiên sử dụng.",
+                "CyberBilling",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return;
+        }
+
+        try
+        {
+            var dialog =
+                new SessionServiceDialog(
+                    _database,
+                    row)
+                {
+                    Owner =
+                        this
+                };
+
+            if (dialog.ShowDialog() == true)
+            {
+                ApplyConnectionAppearance(
+                    row);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "Không thể mở dịch vụ máy trạm.\n\n"
                 + ex.Message,
                 "CyberBilling",
                 MessageBoxButton.OK,
