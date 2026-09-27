@@ -9,6 +9,7 @@ using CyberBilling.Server.Billing;
 using CyberBilling.Server.Dialogs;
 using CyberBilling.Server.Models;
 using CyberBilling.Server.Networking;
+using CyberBilling.Server.Persistence;
 
 namespace CyberBilling.Server;
 
@@ -23,6 +24,9 @@ public partial class MainWindow :
 
     private readonly TcpBillingServer
         _billingServer = new();
+
+    private readonly CyberBillingDatabase
+        _database = new();
 
     private readonly ObservableCollection<
         WorkstationRow>
@@ -65,10 +69,20 @@ public partial class MainWindow :
     {
         try
         {
+            /*
+             * DB phải được khởi tạo và
+             * phục hồi trước khi mở TCP Server.
+             */
+            _database.Initialize();
+
+            LoadPersistedState();
+
             await _billingServer
                 .StartAsync();
 
             _billingTimer.Start();
+
+            RefreshBillingValues();
 
             RefreshServerStatus();
 
@@ -78,13 +92,154 @@ public partial class MainWindow :
         catch (Exception ex)
         {
             MessageBox.Show(
-                ex.Message,
+                ex.ToString(),
                 "Không thể khởi động Server",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
 
             Close();
         }
+    }
+
+    private void LoadPersistedState()
+    {
+        BillingSettingsSnapshot settings =
+            _database.LoadSettings();
+
+        _currentHourlyRate =
+            settings.HourlyRate;
+
+        _minimumCharge =
+            settings.MinimumCharge;
+
+        HourlyRateTextBox.Text =
+            _currentHourlyRate.ToString(
+                "0",
+                CultureInfo.InvariantCulture);
+
+        MinimumChargeTextBox.Text =
+            _minimumCharge.ToString(
+                "0",
+                CultureInfo.InvariantCulture);
+
+        foreach (WorkstationSnapshot saved
+                 in _database
+                     .LoadWorkstations())
+        {
+            var row =
+                new WorkstationRow(
+                    saved.WorkstationNumber,
+                    saved.MachineId,
+                    saved.MachineName,
+                    WorkstationConnectionState
+                        .ConnectionLost);
+
+            /*
+             * Đây chỉ là trạng thái trong lúc
+             * Server vừa mở và đang chờ Client
+             * tự reconnect.
+             *
+             * Không tô đỏ ngay tại startup.
+             */
+            row.Status =
+                "Chờ kết nối";
+
+            row.MachineNameBackground =
+                Brushes.Transparent;
+
+            _workstations.Add(
+                row);
+        }
+
+        foreach (ActiveSessionSnapshot session
+                 in _database
+                     .LoadActiveSessions())
+        {
+            WorkstationRow? row =
+                _workstations
+                    .FirstOrDefault(
+                        workstation =>
+                            workstation.MachineId
+                            == session.MachineId);
+
+            if (row is null)
+            {
+                continue;
+            }
+
+            RestoreActiveSession(
+                row,
+                session);
+        }
+    }
+
+    private static void RestoreActiveSession(
+        WorkstationRow row,
+        ActiveSessionSnapshot session)
+    {
+        row.ActiveSessionId =
+            session.Id;
+
+        row.IsSessionActive =
+            true;
+
+        row.SessionMode =
+            session.Mode;
+
+        row.SessionStartedAt =
+            session.StartedAt;
+
+        row.HourlyRate =
+            session.HourlyRate;
+
+        row.PrepaidAmount =
+            session.PrepaidAmount;
+
+        row.ServiceAmount =
+            session.ServiceAmount;
+
+        row.IsPrepaidExpired =
+            false;
+
+        row.StartTimeText =
+            session.StartedAt.ToString(
+                "HH:mm:ss");
+
+        row.StartDateText =
+            session.StartedAt.ToString(
+                "dd/MM/yyyy");
+
+        row.UsedTimeText =
+            "00:00:00";
+
+        if (session.Mode ==
+            SessionBillingMode.Prepaid)
+        {
+            row.Status =
+                "Trả trước";
+
+            row.RemainingTimeText =
+                "00:00:00";
+
+            /*
+             * Theo yêu cầu:
+             * phiên trả trước không hiện số
+             * tiền đã nạp trên bảng chính.
+             */
+            row.AmountText =
+                "0 đ";
+
+            return;
+        }
+
+        row.Status =
+            "Đang sử dụng";
+
+        row.RemainingTimeText =
+            "999:99";
+
+        row.AmountText =
+            "0 đ";
     }
 
     private void
@@ -138,19 +293,36 @@ public partial class MainWindow :
             return;
         }
 
+        try
+        {
+            /*
+             * Transaction này lưu Settings
+             * và đổi HourlyRate của tất cả
+             * session Active cùng lúc.
+             */
+            _database
+                .SavePricingAndApplyToActiveSessions(
+                    newHourlyRate,
+                    newMinimumCharge);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "Không thể lưu giá mới.\n\n"
+                + ex.Message,
+                "CyberBilling",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+
+            return;
+        }
+
         _currentHourlyRate =
             newHourlyRate;
 
         _minimumCharge =
             newMinimumCharge;
 
-        /*
-         * Giá mới áp dụng ngay cho TẤT CẢ
-         * phiên đang chạy:
-         *
-         * - trả sau
-         * - trả trước
-         */
         foreach (WorkstationRow row
                  in _workstations)
         {
@@ -241,6 +413,15 @@ public partial class MainWindow :
                 row.ConnectionState =
                     info.State;
 
+                /*
+                 * MachineId giữ nguyên nên số máy
+                 * sẽ sống qua restart Server.
+                 */
+                _database.UpsertWorkstation(
+                    row.WorkstationNumber,
+                    row.MachineId,
+                    row.MachineName);
+
                 ApplyConnectionAppearance(
                     row);
             });
@@ -295,13 +476,60 @@ public partial class MainWindow :
         return null;
     }
 
+    private void WorkstationContextMenu_Opened(
+        object sender,
+        RoutedEventArgs e)
+    {
+        bool hasRow =
+            WorkstationsGrid.SelectedItem
+            is WorkstationRow;
+
+        if (!hasRow)
+        {
+            StartPrepaidMenuItem.Visibility =
+                Visibility.Collapsed;
+
+            PayPrepaidMenuItem.Visibility =
+                Visibility.Collapsed;
+
+            BillPostpaidMenuItem.Visibility =
+                Visibility.Collapsed;
+
+            return;
+        }
+
+        WorkstationRow row =
+            (WorkstationRow)
+                WorkstationsGrid.SelectedItem;
+
+        StartPrepaidMenuItem.Visibility =
+            !row.IsSessionActive
+            && row.ConnectionState ==
+                WorkstationConnectionState.Online
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        PayPrepaidMenuItem.Visibility =
+            row.IsSessionActive
+            && row.SessionMode ==
+                SessionBillingMode.Prepaid
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        BillPostpaidMenuItem.Visibility =
+            row.IsSessionActive
+            && row.SessionMode ==
+                SessionBillingMode.Postpaid
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+    }
+
     private void
         StartPrepaidMenuItem_Click(
             object sender,
             RoutedEventArgs e)
     {
-        if (WorkstationsGrid
-                .SelectedItem
+        if (WorkstationsGrid.SelectedItem
             is not WorkstationRow row)
         {
             return;
@@ -322,12 +550,6 @@ public partial class MainWindow :
 
         if (row.IsSessionActive)
         {
-            MessageBox.Show(
-                "Máy trạm đang có phiên sử dụng.",
-                "CyberBilling",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-
             return;
         }
 
@@ -347,9 +569,92 @@ public partial class MainWindow :
             return;
         }
 
-        StartPrepaidSession(
-            row,
-            dialog.PrepaidAmount);
+        try
+        {
+            StartPrepaidSession(
+                row,
+                dialog.PrepaidAmount);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "Không thể bắt đầu phiên trả trước.\n\n"
+                + ex.Message,
+                "CyberBilling",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void PayPrepaidMenuItem_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (WorkstationsGrid.SelectedItem
+            is not WorkstationRow row)
+        {
+            return;
+        }
+
+        if (!row.IsSessionActive
+            || row.SessionMode !=
+                SessionBillingMode.Prepaid)
+        {
+            return;
+        }
+
+        MessageBoxResult confirmation =
+            MessageBox.Show(
+                "Kết thúc phiên trả trước của máy "
+                + row.WorkstationNumberText
+                + " - "
+                + row.MachineName
+                + "?",
+                "Thanh toán",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+        if (confirmation !=
+            MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            CompleteSessions(
+                row);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "Không thể hoàn tất phiên.\n\n"
+                + ex.Message,
+                "CyberBilling",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void BillPostpaidMenuItem_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (WorkstationsGrid.SelectedItem
+            is not WorkstationRow row)
+        {
+            return;
+        }
+
+        if (!row.IsSessionActive
+            || row.SessionMode !=
+                SessionBillingMode.Postpaid)
+        {
+            return;
+        }
+
+        OpenBillingDialog(
+            row);
     }
 
     private void
@@ -370,21 +675,29 @@ public partial class MainWindow :
             return;
         }
 
-        /*
-         * Máy chưa có phiên:
-         * double-click = trả sau.
-         */
         if (!row.IsSessionActive)
         {
-            StartPostpaidSession(
-                row);
+            try
+            {
+                StartPostpaidSession(
+                    row);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Không thể bắt đầu phiên.\n\n"
+                    + ex.Message,
+                    "CyberBilling",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
 
             return;
         }
 
         /*
-         * Trả trước đã thanh toán rồi.
-         * Không mở dialog tính tiền.
+         * Trả trước đã trả tiền từ đầu.
+         * Double-click không mở BillingDialog.
          */
         if (row.SessionMode ==
             SessionBillingMode.Prepaid)
@@ -405,7 +718,8 @@ public partial class MainWindow :
                     .Where(
                         machine =>
                             machine != row
-                            && machine.IsSessionActive
+                            && machine
+                                .IsSessionActive
                             && machine.SessionMode ==
                                 SessionBillingMode
                                     .Postpaid)
@@ -424,25 +738,38 @@ public partial class MainWindow :
         bool? result =
             dialog.ShowDialog();
 
-        if (result != true)
+        if (result != true
+            || dialog.Result ==
+                BillingDialogResult.Cancelled)
         {
             return;
         }
 
-        if (dialog.Result ==
-            BillingDialogResult.Cancelled)
+        try
         {
-            return;
+            if (dialog.LinkedMachine
+                is not null)
+            {
+                CompleteSessions(
+                    row,
+                    dialog.LinkedMachine);
+            }
+            else
+            {
+                CompleteSessions(
+                    row);
+            }
         }
-
-        CompleteSession(
-            row);
-
-        if (dialog.LinkedMachine
-            is not null)
+        catch (Exception ex)
         {
-            CompleteSession(
-                dialog.LinkedMachine);
+            MessageBox.Show(
+                "Không thể lưu thanh toán.\n\n"
+                + ex.Message,
+                "CyberBilling",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+
+            return;
         }
 
         if (dialog.Result ==
@@ -465,6 +792,18 @@ public partial class MainWindow :
     {
         DateTime now =
             DateTime.Now;
+
+        long sessionId =
+            _database.CreateActiveSession(
+                row.MachineId,
+                SessionBillingMode.Postpaid,
+                now,
+                _currentHourlyRate,
+                0m,
+                0m);
+
+        row.ActiveSessionId =
+            sessionId;
 
         row.IsSessionActive =
             true;
@@ -523,6 +862,18 @@ public partial class MainWindow :
                     prepaidAmount,
                     _currentHourlyRate);
 
+        long sessionId =
+            _database.CreateActiveSession(
+                row.MachineId,
+                SessionBillingMode.Prepaid,
+                now,
+                _currentHourlyRate,
+                prepaidAmount,
+                0m);
+
+        row.ActiveSessionId =
+            sessionId;
+
         row.IsSessionActive =
             true;
 
@@ -560,22 +911,54 @@ public partial class MainWindow :
                     duration);
 
         /*
-         * Cột số tiền của phiên trả trước
-         * hiển thị số tiền khách đã nạp.
+         * QUY TẮC MỚI:
+         * trả trước vẫn giữ PrepaidAmount
+         * nội bộ nhưng bảng chính chỉ hiện 0.
          */
         row.AmountText =
-            BillingCalculator
-                .FormatMoney(
-                    prepaidAmount);
+            "0 đ";
 
         row.StartDateText =
             now.ToString(
                 "dd/MM/yyyy");
     }
 
-    private static void CompleteSession(
+    private void CompleteSessions(
+        params WorkstationRow[] rows)
+    {
+        long[] sessionIds =
+            rows
+                .Where(
+                    row =>
+                        row.ActiveSessionId
+                            .HasValue)
+                .Select(
+                    row =>
+                        row.ActiveSessionId!
+                            .Value)
+                .ToArray();
+
+        /*
+         * DB hoàn tất trước.
+         * Nếu DB lỗi thì UI chưa bị reset.
+         */
+        _database.MarkSessionsPaid(
+            sessionIds);
+
+        foreach (WorkstationRow row
+                 in rows)
+        {
+            ClearSessionState(
+                row);
+        }
+    }
+
+    private static void ClearSessionState(
         WorkstationRow row)
     {
+        row.ActiveSessionId =
+            null;
+
         row.IsSessionActive =
             false;
 
@@ -609,12 +992,18 @@ public partial class MainWindow :
         row.StartDateText =
             "--";
 
-        row.Status =
-            row.ConnectionState ==
+        if (row.ConnectionState ==
             WorkstationConnectionState
-                .Online
-                ? "Sẵn sàng"
-                : "Đã tắt";
+                .Online)
+        {
+            row.Status =
+                "Sẵn sàng";
+
+            return;
+        }
+
+        row.Status =
+            "Đã tắt";
     }
 
     private void OnBillingTimerTick(
@@ -701,11 +1090,6 @@ public partial class MainWindow :
         WorkstationRow row,
         TimeSpan elapsed)
     {
-        /*
-         * Vì HourlyRate của row được thay
-         * ngay khi Admin đổi giá, tổng thời
-         * gian trả trước cũng tự tính lại.
-         */
         TimeSpan totalDuration =
             BillingCalculator
                 .CalculatePrepaidDuration(
@@ -716,10 +1100,12 @@ public partial class MainWindow :
             totalDuration -
             elapsed;
 
+        /*
+         * Trả trước không hiển thị tiền
+         * trên bảng chính.
+         */
         row.AmountText =
-            BillingCalculator
-                .FormatMoney(
-                    row.PrepaidAmount);
+            "0 đ";
 
         if (remaining <= TimeSpan.Zero)
         {

@@ -140,15 +140,24 @@
 
                 <DataGrid.ContextMenu>
 
-                    <ContextMenu>
+                    <ContextMenu Opened="WorkstationContextMenu_Opened">
 
-                        <MenuItem Header="Đăng nhập (trả tiền trước)"
+                        <MenuItem x:Name="StartPrepaidMenuItem"
+                                  Header="Đăng nhập (trả tiền trước)"
                                   Click="StartPrepaidMenuItem_Click"/>
+
+                        <MenuItem x:Name="PayPrepaidMenuItem"
+                                  Header="Thanh toán"
+                                  Click="PayPrepaidMenuItem_Click"/>
+
+                        <MenuItem x:Name="BillPostpaidMenuItem"
+                                  Header="Tính tiền"
+                                  Click="BillPostpaidMenuItem_Click"/>
 
                     </ContextMenu>
 
                 </DataGrid.ContextMenu>
-                
+
                 <DataGrid.Resources>
 
                     <Style TargetType="DataGridColumnHeader">

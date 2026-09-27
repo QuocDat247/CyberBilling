@@ -240,6 +240,12 @@ public sealed class WorkstationRow :
      * Chưa lưu DB ở milestone này.
      */
 
+    public long? ActiveSessionId
+    {
+        get;
+        set;
+    }
+
     public bool IsSessionActive
     {
         get;
