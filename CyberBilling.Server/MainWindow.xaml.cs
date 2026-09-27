@@ -501,54 +501,180 @@ public partial class MainWindow :
     object sender,
     RoutedEventArgs e)
     {
-        bool hasRow =
-            WorkstationsGrid.SelectedItem
-            is WorkstationRow;
-
-        if (!hasRow)
+        if (WorkstationsGrid.SelectedItem
+            is not WorkstationRow row)
         {
             StartPrepaidMenuItem.Visibility =
                 Visibility.Collapsed;
 
-            PayPrepaidMenuItem.Visibility =
+            AdminLoginMenuItem.Visibility =
                 Visibility.Collapsed;
 
             BillPostpaidMenuItem.Visibility =
                 Visibility.Collapsed;
 
+            PayPrepaidMenuItem.Visibility =
+                Visibility.Collapsed;
+
+            ChangeWorkstationMenuItem.Visibility =
+                Visibility.Collapsed;
+
+            RestartWorkstationMenuItem.Visibility =
+                Visibility.Collapsed;
+
+            ShutdownWorkstationMenuItem.Visibility =
+                Visibility.Collapsed;
+
+            CloseApplicationsMenuItem.Visibility =
+                Visibility.Collapsed;
+
             ServiceMenuItem.Visibility =
+                Visibility.Collapsed;
+
+            SessionSeparator.Visibility =
+                Visibility.Collapsed;
+
+            PowerSeparator.Visibility =
+                Visibility.Collapsed;
+
+            ServiceSeparator.Visibility =
                 Visibility.Collapsed;
 
             return;
         }
 
-        WorkstationRow row =
-            (WorkstationRow)
-                WorkstationsGrid.SelectedItem;
+        bool isOnline =
+            row.ConnectionState ==
+            WorkstationConnectionState.Online;
 
+        bool hasSession =
+            row.IsSessionActive;
+
+        bool isPostpaid =
+            hasSession
+            && row.SessionMode ==
+                SessionBillingMode.Postpaid;
+
+        bool isPrepaid =
+            hasSession
+            && row.SessionMode ==
+                SessionBillingMode.Prepaid;
+
+        /*
+         * MÁY SẴN SÀNG
+         */
         StartPrepaidMenuItem.Visibility =
-            !row.IsSessionActive
-            && row.ConnectionState ==
-                WorkstationConnectionState.Online
+            isOnline
+            && !hasSession
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        AdminLoginMenuItem.Visibility =
+            isOnline
+            && !hasSession
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        /*
+         * THANH TOÁN
+         */
+        BillPostpaidMenuItem.Visibility =
+            isPostpaid
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
         PayPrepaidMenuItem.Visibility =
-            row.IsSessionActive
-            && row.SessionMode ==
-                SessionBillingMode.Prepaid
+            isPrepaid
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
-        BillPostpaidMenuItem.Visibility =
-            row.IsSessionActive
-            && row.SessionMode ==
-                SessionBillingMode.Postpaid
+        /*
+         * ĐỔI MÁY TRẠM.
+         * #12 sẽ nối chức năng thật.
+         */
+        ChangeWorkstationMenuItem.Visibility =
+            hasSession
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
+        /*
+         * LỆNH ĐIỀU KHIỂN WINDOWS.
+         * #13 sẽ nối chức năng thật.
+         */
+        RestartWorkstationMenuItem.Visibility =
+            isOnline
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        ShutdownWorkstationMenuItem.Visibility =
+            isOnline
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        CloseApplicationsMenuItem.Visibility =
+            isOnline
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        /*
+         * Dịch vụ chỉ thuộc phiên đang chạy.
+         */
         ServiceMenuItem.Visibility =
-            row.IsSessionActive
+            hasSession
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        bool hasSessionCommands =
+            StartPrepaidMenuItem.Visibility ==
+                Visibility.Visible
+            || AdminLoginMenuItem.Visibility ==
+                Visibility.Visible
+            || BillPostpaidMenuItem.Visibility ==
+                Visibility.Visible
+            || PayPrepaidMenuItem.Visibility ==
+                Visibility.Visible;
+
+        bool hasControlCommands =
+            ChangeWorkstationMenuItem.Visibility ==
+                Visibility.Visible
+            || RestartWorkstationMenuItem.Visibility ==
+                Visibility.Visible
+            || ShutdownWorkstationMenuItem.Visibility ==
+                Visibility.Visible
+            || CloseApplicationsMenuItem.Visibility ==
+                Visibility.Visible
+            || ServiceMenuItem.Visibility ==
+                Visibility.Visible;
+
+        SessionSeparator.Visibility =
+            hasSessionCommands
+            && hasControlCommands
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        bool hasChangeWorkstation =
+            ChangeWorkstationMenuItem.Visibility ==
+                Visibility.Visible;
+
+        bool hasPowerCommands =
+            RestartWorkstationMenuItem.Visibility ==
+                Visibility.Visible
+            || ShutdownWorkstationMenuItem.Visibility ==
+                Visibility.Visible
+            || CloseApplicationsMenuItem.Visibility ==
+                Visibility.Visible;
+
+        PowerSeparator.Visibility =
+            hasChangeWorkstation
+            && hasPowerCommands
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        ServiceSeparator.Visibility =
+            ServiceMenuItem.Visibility ==
+                Visibility.Visible
+            && (hasChangeWorkstation
+                || hasPowerCommands)
                 ? Visibility.Visible
                 : Visibility.Collapsed;
     }

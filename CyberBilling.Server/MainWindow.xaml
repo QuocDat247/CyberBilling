@@ -156,17 +156,51 @@
 
                     <ContextMenu Opened="WorkstationContextMenu_Opened">
 
+                        <!-- MỞ / THANH TOÁN PHIÊN -->
+
                         <MenuItem x:Name="StartPrepaidMenuItem"
-                                  Header="Đăng nhập (trả tiền trước)"
+                                  Header="Đăng nhập trả tiền trước"
                                   Click="StartPrepaidMenuItem_Click"/>
+
+                        <MenuItem x:Name="AdminLoginMenuItem"
+                                  Header="Đăng nhập quyền quản trị"
+                                  IsEnabled="False"/>
+
+                        <MenuItem x:Name="BillPostpaidMenuItem"
+                                  Header="Tính tiền"
+                                  Click="BillPostpaidMenuItem_Click"/>
 
                         <MenuItem x:Name="PayPrepaidMenuItem"
                                   Header="Thanh toán"
                                   Click="PayPrepaidMenuItem_Click"/>
 
-                        <MenuItem x:Name="BillPostpaidMenuItem"
-                                  Header="Tính tiền"
-                                  Click="BillPostpaidMenuItem_Click"/>
+                        <Separator x:Name="SessionSeparator"/>
+
+                        <!-- ĐIỀU KHIỂN PHIÊN -->
+
+                        <MenuItem x:Name="ChangeWorkstationMenuItem"
+                                  Header="Đổi máy trạm"
+                                  IsEnabled="False"/>
+
+                        <Separator x:Name="PowerSeparator"/>
+
+                        <!-- ĐIỀU KHIỂN WINDOWS -->
+
+                        <MenuItem x:Name="RestartWorkstationMenuItem"
+                                  Header="Khởi động lại"
+                                  IsEnabled="False"/>
+
+                        <MenuItem x:Name="ShutdownWorkstationMenuItem"
+                                  Header="Tắt máy"
+                                  IsEnabled="False"/>
+
+                        <MenuItem x:Name="CloseApplicationsMenuItem"
+                                  Header="Đóng tất cả ứng dụng"
+                                  IsEnabled="False"/>
+
+                        <Separator x:Name="ServiceSeparator"/>
+
+                        <!-- DỊCH VỤ -->
 
                         <MenuItem x:Name="ServiceMenuItem"
                                   Header="Dịch vụ"
