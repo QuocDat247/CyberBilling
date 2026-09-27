@@ -1,0 +1,152 @@
+﻿<Window x:Class="CyberBilling.Server.Dialogs.ChangeWorkstationDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Đổi máy trạm"
+        Width="720"
+        Height="520"
+        MinWidth="650"
+        MinHeight="450"
+        WindowStartupLocation="CenterOwner"
+        Background="#F3F5F7">
+
+    <Grid Margin="22">
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="18"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="18"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+
+            <TextBlock Text="ĐỔI MÁY TRẠM"
+                       Foreground="#1F2937"
+                       FontSize="24"
+                       FontWeight="SemiBold"/>
+
+            <TextBlock x:Name="SourceMachineText"
+                       Margin="0,6,0,0"
+                       Foreground="#2563EB"
+                       FontSize="16"
+                       FontWeight="SemiBold"/>
+
+            <TextBlock Text="Chọn máy trạm muốn chuyển sang hoặc hoán đổi."
+                       Margin="0,6,0,0"
+                       Foreground="#667085"/>
+
+        </StackPanel>
+
+        <Border Grid.Row="2"
+                Background="White"
+                BorderBrush="#D8DEE8"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="8">
+
+            <DataGrid x:Name="TargetsGrid"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="Horizontal"
+                      HorizontalGridLinesBrush="#E5E7EB"
+                      Background="White"
+                      Foreground="#1F2937"
+                      BorderThickness="0"
+                      SelectionMode="Single"
+                      SelectionUnit="FullRow"
+                      RowHeight="42"
+                      ColumnHeaderHeight="40"
+                      MouseDoubleClick="TargetsGrid_MouseDoubleClick">
+
+                <DataGrid.Resources>
+
+                    <Style TargetType="DataGridColumnHeader">
+                        <Setter Property="Background"
+                                Value="#F8FAFC"/>
+                        <Setter Property="Foreground"
+                                Value="#344054"/>
+                        <Setter Property="FontWeight"
+                                Value="SemiBold"/>
+                        <Setter Property="Padding"
+                                Value="10,0"/>
+                    </Style>
+
+                    <Style TargetType="DataGridRow">
+                        <Setter Property="Background"
+                                Value="White"/>
+                        <Setter Property="Foreground"
+                                Value="#1F2937"/>
+
+                        <Style.Triggers>
+
+                            <Trigger Property="IsSelected"
+                                     Value="True">
+
+                                <Setter Property="Background"
+                                        Value="#DCEAFF"/>
+
+                            </Trigger>
+
+                        </Style.Triggers>
+
+                    </Style>
+
+                    <Style TargetType="DataGridCell">
+                        <Setter Property="BorderThickness"
+                                Value="0"/>
+                        <Setter Property="Padding"
+                                Value="10,0"/>
+                        <Setter Property="VerticalContentAlignment"
+                                Value="Center"/>
+                    </Style>
+
+                </DataGrid.Resources>
+
+                <DataGrid.Columns>
+
+                    <DataGridTextColumn Header="Máy trạm"
+                                        Binding="{Binding NumberText}"
+                                        Width="100"/>
+
+                    <DataGridTextColumn Header="Tên máy"
+                                        Binding="{Binding MachineName}"
+                                        Width="*"/>
+
+                    <DataGridTextColumn Header="Tình trạng"
+                                        Binding="{Binding Status}"
+                                        Width="160"/>
+
+                    <DataGridTextColumn Header="Thao tác"
+                                        Binding="{Binding ActionText}"
+                                        Width="140"/>
+
+                </DataGrid.Columns>
+
+            </DataGrid>
+
+        </Border>
+
+        <StackPanel Grid.Row="4"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+
+            <Button Width="110"
+                    Height="40"
+                    Content="Xác nhận"
+                    Click="ConfirmButton_Click"/>
+
+            <Button Width="100"
+                    Height="40"
+                    Margin="10,0,0,0"
+                    Content="Hủy"
+                    Click="CancelButton_Click"/>
+
+        </StackPanel>
+
+    </Grid>
+
+</Window>

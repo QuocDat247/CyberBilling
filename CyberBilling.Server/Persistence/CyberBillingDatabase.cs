@@ -1203,6 +1203,195 @@ public sealed class CyberBillingDatabase
         transaction.Commit();
     }
 
+    public void MoveActiveSession(
+    long sessionId,
+    string destinationMachineId,
+    long addedPausedSeconds)
+    {
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteTransaction transaction =
+            connection.BeginTransaction();
+
+        using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.Transaction =
+            transaction;
+
+        command.CommandText =
+            """
+        UPDATE Sessions
+        SET
+            MachineId = $destinationMachineId,
+            AccumulatedPausedSeconds =
+                AccumulatedPausedSeconds
+                + $addedPausedSeconds,
+            PausedAtUtc = NULL
+        WHERE
+            Id = $sessionId
+            AND Status = 'Active';
+        """;
+
+        command.Parameters.AddWithValue(
+            "$destinationMachineId",
+            destinationMachineId);
+
+        command.Parameters.AddWithValue(
+            "$addedPausedSeconds",
+            Math.Max(
+                0,
+                addedPausedSeconds));
+
+        command.Parameters.AddWithValue(
+            "$sessionId",
+            sessionId);
+
+        int affectedRows =
+            command.ExecuteNonQuery();
+
+        if (affectedRows != 1)
+        {
+            throw new InvalidOperationException(
+                "Không thể chuyển phiên sang máy trạm mới.");
+        }
+
+        transaction.Commit();
+    }
+
+    public void SwapActiveSessions(
+    long firstSessionId,
+    string firstMachineId,
+    long secondSessionId,
+    string secondMachineId)
+    {
+        if (firstSessionId ==
+            secondSessionId)
+        {
+            throw new InvalidOperationException(
+                "Không thể hoán đổi cùng một phiên.");
+        }
+
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteTransaction transaction =
+            connection.BeginTransaction();
+
+        string temporaryMachineId =
+            "__swap__"
+            + Guid.NewGuid()
+                .ToString("N");
+
+        using (SqliteCommand command =
+               connection.CreateCommand())
+        {
+            command.Transaction =
+                transaction;
+
+            command.CommandText =
+                """
+            UPDATE Sessions
+            SET MachineId = $temporaryMachineId
+            WHERE
+                Id = $sessionId
+                AND MachineId = $machineId
+                AND Status = 'Active';
+            """;
+
+            command.Parameters.AddWithValue(
+                "$temporaryMachineId",
+                temporaryMachineId);
+
+            command.Parameters.AddWithValue(
+                "$sessionId",
+                firstSessionId);
+
+            command.Parameters.AddWithValue(
+                "$machineId",
+                firstMachineId);
+
+            if (command.ExecuteNonQuery() != 1)
+            {
+                throw new InvalidOperationException(
+                    "Không tìm thấy phiên thứ nhất.");
+            }
+        }
+
+        using (SqliteCommand command =
+               connection.CreateCommand())
+        {
+            command.Transaction =
+                transaction;
+
+            command.CommandText =
+                """
+            UPDATE Sessions
+            SET MachineId = $destinationMachineId
+            WHERE
+                Id = $sessionId
+                AND MachineId = $machineId
+                AND Status = 'Active';
+            """;
+
+            command.Parameters.AddWithValue(
+                "$destinationMachineId",
+                firstMachineId);
+
+            command.Parameters.AddWithValue(
+                "$sessionId",
+                secondSessionId);
+
+            command.Parameters.AddWithValue(
+                "$machineId",
+                secondMachineId);
+
+            if (command.ExecuteNonQuery() != 1)
+            {
+                throw new InvalidOperationException(
+                    "Không tìm thấy phiên thứ hai.");
+            }
+        }
+
+        using (SqliteCommand command =
+               connection.CreateCommand())
+        {
+            command.Transaction =
+                transaction;
+
+            command.CommandText =
+                """
+            UPDATE Sessions
+            SET MachineId = $destinationMachineId
+            WHERE
+                Id = $sessionId
+                AND MachineId = $temporaryMachineId
+                AND Status = 'Active';
+            """;
+
+            command.Parameters.AddWithValue(
+                "$destinationMachineId",
+                secondMachineId);
+
+            command.Parameters.AddWithValue(
+                "$sessionId",
+                firstSessionId);
+
+            command.Parameters.AddWithValue(
+                "$temporaryMachineId",
+                temporaryMachineId);
+
+            if (command.ExecuteNonQuery() != 1)
+            {
+                throw new InvalidOperationException(
+                    "Không thể hoàn tất việc hoán đổi.");
+            }
+        }
+
+        transaction.Commit();
+    }
+
     private SqliteConnection OpenConnection()
     {
         SqliteConnection connection =

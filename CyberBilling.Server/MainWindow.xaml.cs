@@ -1692,4 +1692,385 @@ public partial class MainWindow :
                 MessageBoxImage.Error);
         }
     }
+
+    private void ChangeWorkstationMenuItem_Click(
+    object sender,
+    RoutedEventArgs e)
+    {
+        if (WorkstationsGrid.SelectedItem
+            is not WorkstationRow source)
+        {
+            return;
+        }
+
+        if (!source.IsSessionActive
+            || !source.ActiveSessionId.HasValue)
+        {
+            MessageBox.Show(
+                "Máy trạm không có phiên đang sử dụng.",
+                "CyberBilling",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return;
+        }
+
+        List<WorkstationRow> targets =
+            _workstations
+                .Where(
+                    target =>
+                        target != source
+                        && target.ConnectionState ==
+                            WorkstationConnectionState.Online
+                        && (!target.IsSessionActive
+                            || source.ConnectionState ==
+                                WorkstationConnectionState.Online))
+                .OrderBy(
+                    target =>
+                        target.WorkstationNumber)
+                .ToList();
+
+        if (targets.Count == 0)
+        {
+            MessageBox.Show(
+                "Không có máy trạm phù hợp để đổi.",
+                "CyberBilling",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            return;
+        }
+
+        var dialog =
+            new ChangeWorkstationDialog(
+                source,
+                targets)
+            {
+                Owner =
+                    this
+            };
+
+        if (dialog.ShowDialog() != true
+            || dialog.SelectedWorkstation
+                is null)
+        {
+            return;
+        }
+
+        WorkstationRow target =
+            dialog.SelectedWorkstation;
+
+        string message =
+            target.IsSessionActive
+                ? "Hoán đổi phiên giữa máy "
+                    + source.WorkstationNumberText
+                    + " và máy "
+                    + target.WorkstationNumberText
+                    + "?"
+                : "Chuyển phiên từ máy "
+                    + source.WorkstationNumberText
+                    + " sang máy "
+                    + target.WorkstationNumberText
+                    + "?";
+
+        MessageBoxResult confirmation =
+            MessageBox.Show(
+                message,
+                "Đổi máy trạm",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+        if (confirmation !=
+            MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            if (target.IsSessionActive)
+            {
+                SwapWorkstationSessions(
+                    source,
+                    target);
+            }
+            else
+            {
+                MoveWorkstationSession(
+                    source,
+                    target);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "Không thể đổi máy trạm.\n\n"
+                + ex.Message,
+                "CyberBilling",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private void MoveWorkstationSession(
+    WorkstationRow source,
+    WorkstationRow target)
+    {
+        if (!source.ActiveSessionId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "Không tìm thấy phiên cần chuyển.");
+        }
+
+        if (target.IsSessionActive)
+        {
+            throw new InvalidOperationException(
+                "Máy đích đang có phiên sử dụng.");
+        }
+
+        if (target.ConnectionState !=
+            WorkstationConnectionState.Online)
+        {
+            throw new InvalidOperationException(
+                "Máy đích hiện không kết nối.");
+        }
+
+        DateTime now =
+            DateTime.Now;
+
+        long addedPausedSeconds =
+            CalculateAdditionalPausedSeconds(
+                source,
+                now);
+
+        _database.MoveActiveSession(
+            source.ActiveSessionId.Value,
+            target.MachineId,
+            addedPausedSeconds);
+
+        target.ActiveSessionId =
+            source.ActiveSessionId;
+
+        target.IsSessionActive =
+            true;
+
+        target.SessionStartedAt =
+            source.SessionStartedAt;
+
+        target.SessionPausedAt =
+            null;
+
+        target.AccumulatedPausedSeconds =
+            source.AccumulatedPausedSeconds
+            + addedPausedSeconds;
+
+        target.ServiceAmount =
+            source.ServiceAmount;
+
+        target.SessionMode =
+            source.SessionMode;
+
+        target.PrepaidAmount =
+            source.PrepaidAmount;
+
+        target.IsPrepaidExpired =
+            source.IsPrepaidExpired;
+
+        target.HourlyRate =
+            source.HourlyRate;
+
+        target.StartTimeText =
+            source.StartTimeText;
+
+        target.StartDateText =
+            source.StartDateText;
+
+        target.UsedTimeText =
+            source.UsedTimeText;
+
+        target.RemainingTimeText =
+            source.RemainingTimeText;
+
+        target.AmountText =
+            source.AmountText;
+
+        ClearSessionState(
+            source);
+
+        ApplyConnectionAppearance(
+            target);
+
+        RefreshBillingValues();
+    }
+
+    private void SwapWorkstationSessions(
+    WorkstationRow first,
+    WorkstationRow second)
+    {
+        if (!first.ActiveSessionId.HasValue
+            || !second.ActiveSessionId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "Không tìm thấy đủ hai phiên để hoán đổi.");
+        }
+
+        if (first.ConnectionState !=
+                WorkstationConnectionState.Online
+            || second.ConnectionState !=
+                WorkstationConnectionState.Online)
+        {
+            throw new InvalidOperationException(
+                "Chỉ có thể hoán đổi khi cả hai máy đang kết nối.");
+        }
+
+        /*
+         * Nếu vừa reconnect mà phiên vẫn còn
+         * trạng thái pause thì hoàn tất resume
+         * trước khi đổi máy.
+         */
+        ResumeSessionBilling(
+            first);
+
+        ResumeSessionBilling(
+            second);
+
+        WorkstationSessionState firstState =
+            CaptureSessionState(
+                first);
+
+        WorkstationSessionState secondState =
+            CaptureSessionState(
+                second);
+
+        _database.SwapActiveSessions(
+            firstState.SessionId,
+            first.MachineId,
+            secondState.SessionId,
+            second.MachineId);
+
+        ApplySessionState(
+            first,
+            secondState);
+
+        ApplySessionState(
+            second,
+            firstState);
+
+        ApplyConnectionAppearance(
+            first);
+
+        ApplyConnectionAppearance(
+            second);
+
+        RefreshBillingValues();
+    }
+
+    private static WorkstationSessionState
+    CaptureSessionState(
+        WorkstationRow row)
+    {
+        if (!row.ActiveSessionId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "Không tìm thấy phiên đang hoạt động.");
+        }
+
+        return new WorkstationSessionState(
+            row.ActiveSessionId.Value,
+            row.SessionStartedAt,
+            row.SessionPausedAt,
+            row.AccumulatedPausedSeconds,
+            row.ServiceAmount,
+            row.SessionMode,
+            row.PrepaidAmount,
+            row.IsPrepaidExpired,
+            row.HourlyRate);
+    }
+
+    private static void ApplySessionState(
+        WorkstationRow row,
+        WorkstationSessionState state)
+    {
+        row.ActiveSessionId =
+            state.SessionId;
+
+        row.IsSessionActive =
+            true;
+
+        row.SessionStartedAt =
+            state.SessionStartedAt;
+
+        row.SessionPausedAt =
+            state.SessionPausedAt;
+
+        row.AccumulatedPausedSeconds =
+            state.AccumulatedPausedSeconds;
+
+        row.ServiceAmount =
+            state.ServiceAmount;
+
+        row.SessionMode =
+            state.SessionMode;
+
+        row.PrepaidAmount =
+            state.PrepaidAmount;
+
+        row.IsPrepaidExpired =
+            state.IsPrepaidExpired;
+
+        row.HourlyRate =
+            state.HourlyRate;
+
+        row.StartTimeText =
+            state.SessionStartedAt?
+                .ToString(
+                    "HH:mm:ss")
+            ?? "--";
+
+        row.StartDateText =
+            state.SessionStartedAt?
+                .ToString(
+                    "dd/MM/yyyy")
+            ?? "--";
+
+        row.UsedTimeText =
+            "00:00:00";
+
+        row.RemainingTimeText =
+            "--";
+
+        row.AmountText =
+            "0 đ";
+    }
+
+    private static long
+        CalculateAdditionalPausedSeconds(
+            WorkstationRow row,
+            DateTime now)
+    {
+        if (!row.SessionPausedAt.HasValue)
+        {
+            return 0;
+        }
+
+        TimeSpan duration =
+            now
+            - row.SessionPausedAt.Value;
+
+        return Math.Max(
+            0,
+            (long)Math.Floor(
+                duration.TotalSeconds));
+    }
+
+    private sealed record WorkstationSessionState(
+    long SessionId,
+    DateTime? SessionStartedAt,
+    DateTime? SessionPausedAt,
+    long AccumulatedPausedSeconds,
+    decimal ServiceAmount,
+    SessionBillingMode SessionMode,
+    decimal PrepaidAmount,
+    bool IsPrepaidExpired,
+    decimal HourlyRate);
 }

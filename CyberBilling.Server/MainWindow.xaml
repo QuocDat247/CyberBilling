@@ -180,7 +180,7 @@
 
                         <MenuItem x:Name="ChangeWorkstationMenuItem"
                                   Header="Đổi máy trạm"
-                                  IsEnabled="False"/>
+                                  Click="ChangeWorkstationMenuItem_Click"/>
 
                         <Separator x:Name="PowerSeparator"/>
 
