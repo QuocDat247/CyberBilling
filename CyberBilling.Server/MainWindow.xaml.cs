@@ -3,6 +3,7 @@ using CyberBilling.Server.Dialogs;
 using CyberBilling.Server.Models;
 using CyberBilling.Server.Networking;
 using CyberBilling.Server.Persistence;
+using CyberBilling.Shared.SystemIntegration;
 using CyberBilling.Shared.Networking;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -79,6 +80,11 @@ public partial class MainWindow :
              * phục hồi trước khi mở TCP Server.
              */
             _database.Initialize();
+
+            WindowsStartupRegistration
+                .TryRegisterCurrentExecutable(
+                    "CyberBilling.Server",
+                    "CyberBilling.Server.exe");
 
             _billingServer.AdminLoginValidator =
                 (username, password) =>
