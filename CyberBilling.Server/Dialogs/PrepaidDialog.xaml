@@ -1,0 +1,103 @@
+﻿<Window x:Class="CyberBilling.Server.Dialogs.PrepaidDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Đăng nhập trả tiền trước"
+        Width="430"
+        Height="479"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="#101827">
+
+    <Grid Margin="28">
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="24"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="18"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="18"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="28"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+
+            <TextBlock Text="TRẢ TIỀN TRƯỚC"
+                       Foreground="White"
+                       FontSize="23"
+                       FontWeight="SemiBold"/>
+
+            <TextBlock x:Name="MachineText"
+                       Margin="0,6,0,0"
+                       Foreground="#7FB0FF"
+                       FontSize="16"/>
+
+        </StackPanel>
+
+        <StackPanel Grid.Row="2">
+
+            <TextBlock Text="Số tiền khách trả"
+                       Foreground="#DCE7F7"
+                       FontWeight="SemiBold"/>
+
+            <TextBox x:Name="AmountTextBox"
+                     Height="42"
+                     Margin="0,8,0,0"
+                     Padding="10,7"
+                     FontSize="17"
+                     TextChanged="AmountTextBox_TextChanged"/>
+
+        </StackPanel>
+
+        <TextBlock Grid.Row="4"
+                   x:Name="HourlyRateText"
+                   Foreground="#9FB3CE"/>
+
+        <Border Grid.Row="6"
+                Padding="16"
+                Background="#162033"
+                BorderBrush="#2B3A52"
+                BorderThickness="1"
+                CornerRadius="8">
+
+            <StackPanel>
+
+                <TextBlock Text="Thời gian được chơi"
+                           Foreground="#9FB3CE"/>
+
+                <TextBlock x:Name="DurationText"
+                           Margin="0,6,0,0"
+                           Text="--:--:--"
+                           Foreground="#7BE3A8"
+                           FontSize="30"
+                           FontWeight="SemiBold"/>
+
+            </StackPanel>
+
+        </Border>
+
+        <Grid Grid.Row="8">
+
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="0"
+                    Height="44"
+                    Content="Bắt đầu"
+                    Click="StartButton_Click"/>
+
+            <Button Grid.Column="2"
+                    Height="44"
+                    Content="Hủy"
+                    Click="CancelButton_Click"/>
+
+        </Grid>
+
+    </Grid>
+
+</Window>

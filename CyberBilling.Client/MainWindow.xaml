@@ -1,0 +1,57 @@
+﻿<Window x:Class="CyberBilling.Client.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CyberBilling Client"
+        Width="470"
+        Height="390"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        Background="#101827">
+
+    <Grid Margin="32">
+        <StackPanel>
+            <TextBlock Text="CyberBilling Client"
+                       Foreground="White"
+                       FontSize="26"
+                       FontWeight="SemiBold"/>
+
+            <TextBlock Margin="0,8,0,30"
+                       Text="Kết nối máy trạm với máy tính tiền"
+                       Foreground="#91A5C1"/>
+
+            <TextBlock Text="IP máy chủ"
+                       Foreground="White"
+                       FontWeight="SemiBold"/>
+
+            <TextBox x:Name="ServerAddressTextBox"
+                     Height="40"
+                     Margin="0,8,0,20"
+                     Padding="10,7"
+                     FontSize="15"
+                     Text="127.0.0.1"/>
+
+            <TextBlock Text="Tên máy trạm"
+                       Foreground="White"
+                       FontWeight="SemiBold"/>
+
+            <TextBox x:Name="MachineNameTextBox"
+                     Height="40"
+                     Margin="0,8,0,24"
+                     Padding="10,7"
+                     FontSize="15"/>
+
+            <Button x:Name="ConnectButton"
+                    Height="44"
+                    Content="Kết nối"
+                    Click="ConnectButton_Click"
+                    FontWeight="SemiBold"/>
+
+            <TextBlock x:Name="ConnectionStatusText"
+                       Margin="0,22,0,0"
+                       Text="Chưa kết nối"
+                       HorizontalAlignment="Center"
+                       Foreground="#A9B8CD"
+                       FontSize="14"/>
+        </StackPanel>
+    </Grid>
+</Window>
