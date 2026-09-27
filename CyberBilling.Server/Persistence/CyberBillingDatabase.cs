@@ -84,6 +84,8 @@ public sealed class CyberBillingDatabase
                 HourlyRate INTEGER NOT NULL,
                 PrepaidAmount INTEGER NOT NULL DEFAULT 0,
                 ServiceAmount INTEGER NOT NULL DEFAULT 0,
+                PausedAtUtc TEXT NULL,
+                AccumulatedPausedSeconds INTEGER NOT NULL DEFAULT 0,
                 Status TEXT NOT NULL,
                 EndedAtUtc TEXT NULL,
                 PaidAtUtc TEXT NULL
@@ -109,6 +111,8 @@ public sealed class CyberBillingDatabase
             """;
 
         command.ExecuteNonQuery();
+        EnsurePauseColumns(
+            connection);
     }
 
     public BillingSettingsSnapshot
@@ -315,8 +319,12 @@ public sealed class CyberBillingDatabase
                 StartedAtUtc,
                 HourlyRate,
                 PrepaidAmount,
-                ServiceAmount
+                ServiceAmount,
+                PausedAtUtc,
+                AccumulatedPausedSeconds
             FROM Sessions
+            WHERE Status = 'Active'
+            ORDER BY Id;
             WHERE Status = 'Active'
             ORDER BY Id;
             """;
@@ -336,7 +344,12 @@ public sealed class CyberBillingDatabase
                         reader.GetString(3)),
                     reader.GetInt64(4),
                     reader.GetInt64(5),
-                    reader.GetInt64(6)));
+                    reader.GetInt64(6),
+                    reader.IsDBNull(7)
+                        ? null
+                        : FromDatabaseDateTime(
+                            reader.GetString(7)),
+                    reader.GetInt64(8)));
         }
 
         return result;
@@ -529,6 +542,127 @@ public sealed class CyberBillingDatabase
 
         return utc.ToLocalTime();
     }
+
+    private static void EnsurePauseColumns(
+    SqliteConnection connection)
+    {
+        HashSet<string> columns =
+            new(
+                StringComparer
+                    .OrdinalIgnoreCase);
+
+        using (SqliteCommand command =
+               connection.CreateCommand())
+        {
+            command.CommandText =
+                "PRAGMA table_info(Sessions);";
+
+            using SqliteDataReader reader =
+                command.ExecuteReader();
+
+            while (reader.Read())
+            {
+                columns.Add(
+                    reader.GetString(1));
+            }
+        }
+
+        if (!columns.Contains(
+                "PausedAtUtc"))
+        {
+            using SqliteCommand command =
+                connection.CreateCommand();
+
+            command.CommandText =
+                """
+            ALTER TABLE Sessions
+            ADD COLUMN PausedAtUtc TEXT NULL;
+            """;
+
+            command.ExecuteNonQuery();
+        }
+
+        if (!columns.Contains(
+                "AccumulatedPausedSeconds"))
+        {
+            using SqliteCommand command =
+                connection.CreateCommand();
+
+            command.CommandText =
+                """
+            ALTER TABLE Sessions
+            ADD COLUMN AccumulatedPausedSeconds
+                INTEGER NOT NULL DEFAULT 0;
+            """;
+
+            command.ExecuteNonQuery();
+        }
+    }
+    public void PauseActiveSession(
+    long sessionId,
+    DateTime pausedAt)
+    {
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+        UPDATE Sessions
+        SET PausedAtUtc = $pausedAtUtc
+        WHERE
+            Id = $id
+            AND Status = 'Active'
+            AND PausedAtUtc IS NULL;
+        """;
+
+        command.Parameters.AddWithValue(
+            "$pausedAtUtc",
+            ToDatabaseDateTime(
+                pausedAt));
+
+        command.Parameters.AddWithValue(
+            "$id",
+            sessionId);
+
+        command.ExecuteNonQuery();
+    }
+
+    public void ResumeActiveSession(
+        long sessionId,
+        long addedPausedSeconds)
+    {
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+        UPDATE Sessions
+        SET
+            AccumulatedPausedSeconds =
+                AccumulatedPausedSeconds
+                + $seconds,
+            PausedAtUtc = NULL
+        WHERE
+            Id = $id
+            AND Status = 'Active';
+        """;
+
+        command.Parameters.AddWithValue(
+            "$seconds",
+            addedPausedSeconds);
+
+        command.Parameters.AddWithValue(
+            "$id",
+            sessionId);
+
+        command.ExecuteNonQuery();
+    }
 }
 
 public sealed record BillingSettingsSnapshot(
@@ -547,4 +681,6 @@ public sealed record ActiveSessionSnapshot(
     DateTime StartedAt,
     decimal HourlyRate,
     decimal PrepaidAmount,
-    decimal ServiceAmount);
+    decimal ServiceAmount,
+    DateTime? PausedAt,
+    long AccumulatedPausedSeconds);

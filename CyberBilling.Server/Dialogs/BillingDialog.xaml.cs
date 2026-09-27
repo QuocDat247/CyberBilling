@@ -199,10 +199,8 @@ public partial class BillingDialog :
 
         return BillingCalculator
             .CalculateUsageAmount(
-                now -
-                machine
-                    .SessionStartedAt
-                    .Value,
+                machine.GetBillableElapsed(
+                    now),
                 machine.HourlyRate,
                 _minimumCharge);
     }
@@ -220,10 +218,8 @@ public partial class BillingDialog :
 
         return BillingCalculator
             .FormatUsedTime(
-                now -
-                machine
-                    .SessionStartedAt
-                    .Value);
+                machine.GetBillableElapsed(
+                    now));
     }
 
     private void PayButton_Click(

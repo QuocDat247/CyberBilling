@@ -258,6 +258,42 @@ public sealed class WorkstationRow :
         set;
     }
 
+    public DateTime? SessionPausedAt
+    {
+        get;
+        set;
+    }
+
+    public long AccumulatedPausedSeconds
+    {
+        get;
+        set;
+    }
+
+    public TimeSpan GetBillableElapsed(
+        DateTime now)
+    {
+        if (!IsSessionActive
+            || SessionStartedAt is null)
+        {
+            return TimeSpan.Zero;
+        }
+
+        DateTime effectiveEnd =
+            SessionPausedAt
+            ?? now;
+
+        TimeSpan elapsed =
+            effectiveEnd
+            - SessionStartedAt.Value
+            - TimeSpan.FromSeconds(
+                AccumulatedPausedSeconds);
+
+        return elapsed < TimeSpan.Zero
+            ? TimeSpan.Zero
+            : elapsed;
+    }
+
     public decimal ServiceAmount
     {
         get;

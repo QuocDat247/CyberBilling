@@ -43,6 +43,9 @@ public partial class PrepaidDialog :
         object sender,
         TextChangedEventArgs e)
     {
+        MoneyInputFormatter.Format(
+            AmountTextBox);
+
         if (!TryReadAmount(
                 out decimal amount))
         {
@@ -113,19 +116,10 @@ public partial class PrepaidDialog :
     }
 
     private bool TryReadAmount(
-        out decimal amount)
+    out decimal amount)
     {
-        string raw =
-            AmountTextBox
-                .Text
-                .Trim()
-                .Replace(".", string.Empty)
-                .Replace(",", string.Empty);
-
-        return decimal.TryParse(
-                   raw,
-                   NumberStyles.Integer,
-                   CultureInfo.InvariantCulture,
+        return MoneyInputFormatter.TryParse(
+                   AmountTextBox.Text,
                    out amount)
                && amount > 0;
     }

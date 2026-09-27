@@ -189,6 +189,12 @@ public partial class MainWindow :
         row.SessionStartedAt =
             session.StartedAt;
 
+        row.SessionPausedAt =
+            session.PausedAt;
+
+        row.AccumulatedPausedSeconds =
+            session.AccumulatedPausedSeconds;
+
         row.HourlyRate =
             session.HourlyRate;
 
@@ -412,6 +418,21 @@ public partial class MainWindow :
 
                 row.ConnectionState =
                     info.State;
+
+                if (row.IsSessionActive)
+                {
+                    if (info.State ==
+                        WorkstationConnectionState.Online)
+                    {
+                        ResumeSessionBilling(
+                            row);
+                    }
+                    else
+                    {
+                        PauseSessionBilling(
+                            row);
+                    }
+                }
 
                 /*
                  * MachineId giữ nguyên nên số máy
@@ -814,6 +835,12 @@ public partial class MainWindow :
         row.SessionStartedAt =
             now;
 
+        row.SessionPausedAt =
+            null;
+
+        row.AccumulatedPausedSeconds =
+            0;
+
         row.HourlyRate =
             _currentHourlyRate;
 
@@ -882,6 +909,12 @@ public partial class MainWindow :
 
         row.SessionStartedAt =
             now;
+
+        row.SessionPausedAt =
+            null;
+
+        row.AccumulatedPausedSeconds =
+            0;
 
         row.HourlyRate =
             _currentHourlyRate;
@@ -968,6 +1001,12 @@ public partial class MainWindow :
         row.SessionStartedAt =
             null;
 
+        row.SessionPausedAt =
+            null;
+
+        row.AccumulatedPausedSeconds =
+            0;
+
         row.PrepaidAmount =
             0m;
 
@@ -1029,14 +1068,8 @@ public partial class MainWindow :
             }
 
             TimeSpan elapsed =
-                now -
-                row.SessionStartedAt.Value;
-
-            if (elapsed < TimeSpan.Zero)
-            {
-                elapsed =
-                    TimeSpan.Zero;
-            }
+                row.GetBillableElapsed(
+                    now);
 
             row.UsedTimeText =
                 BillingCalculator
@@ -1074,8 +1107,22 @@ public partial class MainWindow :
                     row.HourlyRate,
                     _minimumCharge);
 
-        row.Status =
-            "Đang sử dụng";
+        /*
+         * Billing timer không được phép
+         * ghi đè trạng thái kết nối.
+         *
+         * Offline:
+         * - Mất kết nối
+         * - Đã tắt
+         *
+         * phải được giữ nguyên.
+         */
+        if (row.ConnectionState ==
+            WorkstationConnectionState.Online)
+        {
+            row.Status =
+                "Đang sử dụng";
+        }
 
         row.RemainingTimeText =
             "999:99";
@@ -1112,11 +1159,20 @@ public partial class MainWindow :
             row.RemainingTimeText =
                 "00:00:00";
 
-            row.Status =
-                "Hết giờ";
-
             row.IsPrepaidExpired =
                 true;
+
+            /*
+             * Nếu máy đang mất kết nối hoặc
+             * đã tắt thì trạng thái kết nối
+             * phải được ưu tiên hiển thị.
+             */
+            if (row.ConnectionState ==
+                WorkstationConnectionState.Online)
+            {
+                row.Status =
+                    "Hết giờ";
+            }
 
             return;
         }
@@ -1124,8 +1180,12 @@ public partial class MainWindow :
         row.IsPrepaidExpired =
             false;
 
-        row.Status =
-            "Trả trước";
+        if (row.ConnectionState ==
+            WorkstationConnectionState.Online)
+        {
+            row.Status =
+                "Trả trước";
+        }
 
         row.RemainingTimeText =
             BillingCalculator
@@ -1196,6 +1256,17 @@ public partial class MainWindow :
             "Đang sử dụng";
     }
 
+    private void MoneyTextBox_TextChanged(
+        object sender,
+        TextChangedEventArgs e)
+    {
+        if (sender is TextBox textBox)
+        {
+            MoneyInputFormatter.Format(
+                textBox);
+        }
+    }
+
     private int GetNextWorkstationNumber()
     {
         if (_workstations.Count == 0)
@@ -1226,5 +1297,61 @@ public partial class MainWindow :
 
         await _billingServer
             .DisposeAsync();
+    }
+
+    private void PauseSessionBilling(
+    WorkstationRow row)
+    {
+        if (!row.IsSessionActive
+            || !row.ActiveSessionId.HasValue
+            || row.SessionPausedAt.HasValue)
+        {
+            return;
+        }
+
+        DateTime now =
+            DateTime.Now;
+
+        _database.PauseActiveSession(
+            row.ActiveSessionId.Value,
+            now);
+
+        row.SessionPausedAt =
+            now;
+    }
+
+    private void ResumeSessionBilling(
+        WorkstationRow row)
+    {
+        if (!row.IsSessionActive
+            || !row.ActiveSessionId.HasValue
+            || !row.SessionPausedAt.HasValue)
+        {
+            return;
+        }
+
+        DateTime now =
+            DateTime.Now;
+
+        TimeSpan pauseDuration =
+            now -
+            row.SessionPausedAt.Value;
+
+        long addedSeconds =
+            Math.Max(
+                0,
+                (long)Math.Floor(
+                    pauseDuration
+                        .TotalSeconds));
+
+        _database.ResumeActiveSession(
+            row.ActiveSessionId.Value,
+            addedSeconds);
+
+        row.AccumulatedPausedSeconds +=
+            addedSeconds;
+
+        row.SessionPausedAt =
+            null;
     }
 }
