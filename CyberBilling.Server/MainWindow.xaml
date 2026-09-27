@@ -164,7 +164,11 @@
 
                         <MenuItem x:Name="AdminLoginMenuItem"
                                   Header="Đăng nhập quyền quản trị"
-                                  IsEnabled="False"/>
+                                  Click="AdminLoginMenuItem_Click"/>
+
+                        <MenuItem x:Name="LockWorkstationMenuItem"
+                                  Header="Khóa máy trạm"
+                                  Click="LockWorkstationMenuItem_Click"/>
 
                         <MenuItem x:Name="BillPostpaidMenuItem"
                                   Header="Tính tiền"

@@ -260,6 +260,12 @@ public sealed class WorkstationRow :
         set;
     }
 
+    public bool IsAdminUnlocked
+    {
+        get;
+        set;
+    }
+
     public DateTime? SessionStartedAt
     {
         get;

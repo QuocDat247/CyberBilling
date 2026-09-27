@@ -1,5 +1,6 @@
-﻿using System.Windows;
-using CyberBilling.Client.Networking;
+﻿using CyberBilling.Client.Networking;
+using CyberBilling.Shared.Networking;
+using System.Windows;
 
 namespace CyberBilling.Client;
 
@@ -8,6 +9,9 @@ public partial class MainWindow :
 {
     private readonly TcpBillingClient
         _billingClient = new();
+
+    private LockScreenWindow?
+        _lockScreenWindow;
 
     public MainWindow()
     {
@@ -19,6 +23,14 @@ public partial class MainWindow :
         _billingClient
             .ConnectionStateChanged +=
             OnConnectionStateChanged;
+
+        _billingClient
+            .WorkstationCommandReceived +=
+            OnWorkstationCommandReceived;
+
+        _billingClient
+            .AdminLoginResultReceived +=
+            OnAdminLoginResultReceived;
 
         Closed +=
             OnClosed;
@@ -82,6 +94,14 @@ public partial class MainWindow :
                         ConnectButton.Content =
                             "Đã kết nối";
 
+                        ShowLockScreen(
+                            "Đã kết nối với máy tính tiền");
+
+                        ShowLockScreen(
+                            "Mất kết nối - đang thử kết nối lại...");
+
+                        Hide();
+
                         break;
 
                     case ClientConnectionState
@@ -92,6 +112,9 @@ public partial class MainWindow :
 
                         ConnectButton.Content =
                             "Đang kết nối...";
+
+                        ShowLockScreen(
+                            "Mất kết nối - đang thử kết nối lại...");
 
                         break;
 
@@ -111,10 +134,128 @@ public partial class MainWindow :
         EventArgs e)
     {
         _billingClient
+            .AdminLoginResultReceived -=
+            OnAdminLoginResultReceived;
+
+        _billingClient
             .ConnectionStateChanged -=
             OnConnectionStateChanged;
 
+        _billingClient
+            .WorkstationCommandReceived -=
+            OnWorkstationCommandReceived;
+
+        if (_lockScreenWindow is not null)
+        {
+            _lockScreenWindow
+                .AdminLoginRequested -=
+                OnAdminLoginRequested;
+
+            _lockScreenWindow.AllowClose();
+
+            _lockScreenWindow.Close();
+        }
+
         await _billingClient
             .DisposeAsync();
+    }
+
+    private void OnWorkstationCommandReceived(
+    WorkstationCommandType command)
+    {
+        Dispatcher.Invoke(
+            () =>
+            {
+                if (command ==
+                    WorkstationCommandType
+                        .LockScreen)
+                {
+                    ShowLockScreen(
+                        "Đã kết nối với máy tính tiền");
+
+                    return;
+                }
+
+                if (command ==
+                    WorkstationCommandType
+                        .UnlockScreen)
+                {
+                    HideLockScreen();
+                }
+            });
+    }
+
+    private void ShowLockScreen(
+        string connectionText)
+    {
+        if (_lockScreenWindow is null)
+        {
+            _lockScreenWindow =
+                new LockScreenWindow();
+
+            _lockScreenWindow
+                .AdminLoginRequested +=
+                OnAdminLoginRequested;
+        }
+
+        _lockScreenWindow
+            .SetConnectionText(
+                connectionText);
+
+        if (!_lockScreenWindow.IsVisible)
+        {
+            _lockScreenWindow.Show();
+        }
+
+        _lockScreenWindow.WindowState =
+            WindowState.Maximized;
+
+        _lockScreenWindow.Topmost =
+            true;
+
+        _lockScreenWindow.Activate();
+    }
+
+    private void HideLockScreen()
+    {
+        if (_lockScreenWindow is null)
+        {
+            return;
+        }
+
+        _lockScreenWindow.Hide();
+    }
+
+    private void OnAdminLoginRequested(
+        string username,
+        string password)
+    {
+        _billingClient
+            .RequestAdminLogin(
+                username,
+                password);
+    }
+
+    private void OnAdminLoginResultReceived(
+        AdminLoginResultPayload result)
+    {
+        Dispatcher.Invoke(
+            () =>
+            {
+                if (_lockScreenWindow is null)
+                {
+                    return;
+                }
+
+                _lockScreenWindow
+                    .SetAdminLoginResult(
+                        result.Success,
+                        result.Message);
+
+                if (result.Success)
+                {
+                    HideLockScreen();
+                }
+            });
     }
 }

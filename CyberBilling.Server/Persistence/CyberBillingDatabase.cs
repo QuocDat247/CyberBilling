@@ -1,4 +1,5 @@
-﻿using CyberBilling.Server.Models;
+﻿using System.Security.Cryptography;
+using CyberBilling.Server.Models;
 using Microsoft.Data.Sqlite;
 using System.Globalization;
 using System.IO;
@@ -65,6 +66,13 @@ public sealed class CyberBillingDatabase
                 Id INTEGER NOT NULL PRIMARY KEY,
                 HourlyRate INTEGER NOT NULL,
                 MinimumCharge INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS SecuritySettings
+            (
+                Id INTEGER NOT NULL PRIMARY KEY,
+                AdminPasswordSalt BLOB NOT NULL,
+                AdminPasswordHash BLOB NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS Workstations
@@ -192,6 +200,142 @@ public sealed class CyberBillingDatabase
         return new BillingSettingsSnapshot(
             reader.GetInt64(0),
             reader.GetInt64(1));
+    }
+
+    public bool HasAdminPassword()
+    {
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+        SELECT COUNT(*)
+        FROM SecuritySettings
+        WHERE Id = 1;
+        """;
+
+        return Convert.ToInt32(
+            command.ExecuteScalar(),
+            CultureInfo.InvariantCulture) > 0;
+    }
+
+    public void SetAdminPassword(
+        string password)
+    {
+        if (string.IsNullOrWhiteSpace(
+                password)
+            || password.Length < 4)
+        {
+            throw new ArgumentException(
+                "Mật khẩu phải có ít nhất 4 ký tự.",
+                nameof(password));
+        }
+
+        byte[] salt =
+            RandomNumberGenerator
+                .GetBytes(
+                    16);
+
+        byte[] hash =
+            Rfc2898DeriveBytes.Pbkdf2(
+                password,
+                salt,
+                120_000,
+                HashAlgorithmName.SHA256,
+                32);
+
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+        INSERT INTO SecuritySettings
+        (
+            Id,
+            AdminPasswordSalt,
+            AdminPasswordHash
+        )
+        VALUES
+        (
+            1,
+            $salt,
+            $hash
+        )
+        ON CONFLICT(Id)
+        DO UPDATE SET
+            AdminPasswordSalt =
+                excluded.AdminPasswordSalt,
+            AdminPasswordHash =
+                excluded.AdminPasswordHash;
+        """;
+
+        command.Parameters
+            .Add(
+                "$salt",
+                SqliteType.Blob)
+            .Value =
+                salt;
+
+        command.Parameters
+            .Add(
+                "$hash",
+                SqliteType.Blob)
+            .Value =
+                hash;
+
+        command.ExecuteNonQuery();
+    }
+
+    public bool VerifyAdminPassword(
+        string password)
+    {
+        using SqliteConnection connection =
+            OpenConnection();
+
+        using SqliteCommand command =
+            connection.CreateCommand();
+
+        command.CommandText =
+            """
+        SELECT
+            AdminPasswordSalt,
+            AdminPasswordHash
+        FROM SecuritySettings
+        WHERE Id = 1;
+        """;
+
+        using SqliteDataReader reader =
+            command.ExecuteReader();
+
+        if (!reader.Read())
+        {
+            return false;
+        }
+
+        byte[] salt =
+            (byte[])reader[0];
+
+        byte[] expectedHash =
+            (byte[])reader[1];
+
+        byte[] actualHash =
+            Rfc2898DeriveBytes.Pbkdf2(
+                password,
+                salt,
+                120_000,
+                HashAlgorithmName.SHA256,
+                32);
+
+        return CryptographicOperations
+            .FixedTimeEquals(
+                expectedHash,
+                actualHash);
     }
 
     public void SavePricingAndApplyToActiveSessions(

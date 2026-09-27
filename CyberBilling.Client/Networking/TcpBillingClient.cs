@@ -1,4 +1,5 @@
-﻿using CyberBilling.Client.SystemControl;
+﻿using System.Collections.Concurrent;
+using CyberBilling.Client.SystemControl;
 using CyberBilling.Shared.Networking;
 using System.IO;
 using System.Net.Sockets;
@@ -9,6 +10,11 @@ namespace CyberBilling.Client.Networking;
 public sealed class TcpBillingClient :
     IAsyncDisposable
 {
+    private readonly ConcurrentQueue<
+        AdminLoginRequestPayload>
+        _adminLoginRequests =
+            new();
+
     private const int
         TcpBillingServerPort =
             5055;
@@ -34,6 +40,14 @@ public sealed class TcpBillingClient :
     public event EventHandler<
         ClientConnectionStateChangedEventArgs>?
         ConnectionStateChanged;
+
+    public event Action<
+        WorkstationCommandType>?
+        WorkstationCommandReceived;
+
+    public event Action<
+        AdminLoginResultPayload>?
+        AdminLoginResultReceived;
 
     public bool IsRunning =>
         _runTask is not null;
@@ -161,6 +175,20 @@ public sealed class TcpBillingClient :
                 while (!cancellationToken
                            .IsCancellationRequested)
                 {
+                    while (_adminLoginRequests
+                       .TryDequeue(
+                           out AdminLoginRequestPayload?
+                               loginRequest))
+                    {
+                        string loginMessage =
+                            ProtocolJson.Serialize(
+                                MessageTypes.AdminLoginRequest,
+                                loginRequest);
+
+                        await writer.WriteLineAsync(
+                            loginMessage);
+                    }
+
                     var heartbeat =
                         new HeartbeatPayload(
                             machineId,
@@ -216,6 +244,28 @@ public sealed class TcpBillingClient :
 
                         if (string.Equals(
                                 responseMessage.Type,
+                                MessageTypes.AdminLoginResult,
+                                StringComparison.Ordinal))
+                        {
+                            AdminLoginResultPayload?
+                                loginResult =
+                                    ProtocolJson
+                                        .DeserializePayload<
+                                            AdminLoginResultPayload>(
+                                                responseMessage);
+
+                            if (loginResult is not null)
+                            {
+                                AdminLoginResultReceived?
+                                    .Invoke(
+                                        loginResult);
+                            }
+
+                            continue;
+                        }
+
+                        if (string.Equals(
+                                responseMessage.Type,
                                 MessageTypes.WorkstationCommand,
                                 StringComparison.Ordinal))
                         {
@@ -228,6 +278,18 @@ public sealed class TcpBillingClient :
 
                             if (command is null)
                             {
+                                continue;
+                            }
+
+                            if (command.Command ==
+                                    WorkstationCommandType.LockScreen
+                                || command.Command ==
+                                    WorkstationCommandType.UnlockScreen)
+                            {
+                                WorkstationCommandReceived?
+                                    .Invoke(
+                                        command.Command);
+
                                 continue;
                             }
 
@@ -434,5 +496,15 @@ public sealed class TcpBillingClient :
     public async ValueTask DisposeAsync()
     {
         await StopAsync();
+    }
+
+    public void RequestAdminLogin(
+        string username,
+        string password)
+    {
+        _adminLoginRequests.Enqueue(
+            new AdminLoginRequestPayload(
+                username,
+                password));
     }
 }

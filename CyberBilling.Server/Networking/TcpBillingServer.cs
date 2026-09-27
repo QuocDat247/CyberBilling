@@ -44,6 +44,19 @@ public sealed class TcpBillingServer :
     public bool IsRunning =>
         _listener is not null;
 
+    public Func<
+        string,
+        string,
+        bool>?
+        AdminLoginValidator
+    {
+        get;
+        set;
+    }
+
+    public event Action<string>?
+        AdminAccessGranted;
+
     public Task StartAsync(
         CancellationToken cancellationToken =
             default)
@@ -274,6 +287,63 @@ public sealed class TcpBillingServer :
 
                 if (message is null)
                 {
+                    continue;
+                }
+
+                if (string.Equals(
+        message.Type,
+        MessageTypes.AdminLoginRequest,
+        StringComparison.Ordinal))
+                {
+                    AdminLoginRequestPayload? login =
+                        ProtocolJson
+                            .DeserializePayload<
+                                AdminLoginRequestPayload>(
+                                    message);
+
+                    bool success =
+                        false;
+
+                    if (login is not null
+                        && AdminLoginValidator
+                            is not null)
+                    {
+                        try
+                        {
+                            success =
+                                AdminLoginValidator(
+                                    login.Username,
+                                    login.Password);
+                        }
+                        catch
+                        {
+                            success =
+                                false;
+                        }
+                    }
+
+                    string resultMessage =
+                        success
+                            ? "Đăng nhập quản trị thành công."
+                            : "Tài khoản hoặc mật khẩu không đúng.";
+
+                    string result =
+                        ProtocolJson.Serialize(
+                            MessageTypes.AdminLoginResult,
+                            new AdminLoginResultPayload(
+                                success,
+                                resultMessage));
+
+                    await writer.WriteLineAsync(
+                        result);
+
+                    if (success)
+                    {
+                        AdminAccessGranted?
+                            .Invoke(
+                                hello.MachineId);
+                    }
+
                     continue;
                 }
 

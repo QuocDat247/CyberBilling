@@ -47,6 +47,10 @@ public partial class MainWindow :
             .WorkstationConnectionChanged +=
             OnWorkstationConnectionChanged;
 
+        _billingServer
+            .AdminAccessGranted +=
+            OnAdminAccessGranted;
+
         _billingTimer =
             new DispatcherTimer
             {
@@ -75,6 +79,36 @@ public partial class MainWindow :
              * phục hồi trước khi mở TCP Server.
              */
             _database.Initialize();
+
+            _billingServer.AdminLoginValidator =
+                (username, password) =>
+                    string.Equals(
+                        username,
+                        "admin",
+                        StringComparison
+                            .OrdinalIgnoreCase)
+                    && _database.VerifyAdminPassword(
+                        password);
+
+            if (!_database.HasAdminPassword())
+            {
+                var setupDialog =
+                    new AdminPasswordSetupDialog
+                    {
+                        Owner =
+                            this
+                    };
+
+                if (setupDialog.ShowDialog() != true)
+                {
+                    Close();
+
+                    return;
+                }
+
+                _database.SetAdminPassword(
+                    setupDialog.EnteredPassword);
+            }
 
             LoadPersistedState();
 
@@ -446,6 +480,9 @@ public partial class MainWindow :
 
                 ApplyConnectionAppearance(
                     row);
+
+                SynchronizeClientAccessState(
+                    row);
             });
     }
 
@@ -511,6 +548,9 @@ public partial class MainWindow :
             AdminLoginMenuItem.Visibility =
                 Visibility.Collapsed;
 
+            LockWorkstationMenuItem.Visibility =
+                Visibility.Collapsed;
+
             BillPostpaidMenuItem.Visibility =
                 Visibility.Collapsed;
 
@@ -551,6 +591,10 @@ public partial class MainWindow :
         bool hasSession =
             row.IsSessionActive;
 
+        bool isAdminUnlocked =
+            !hasSession
+            && row.IsAdminUnlocked;
+
         bool isPostpaid =
             hasSession
             && row.SessionMode ==
@@ -561,24 +605,26 @@ public partial class MainWindow :
             && row.SessionMode ==
                 SessionBillingMode.Prepaid;
 
-        /*
-         * MÁY SẴN SÀNG
-         */
         StartPrepaidMenuItem.Visibility =
             isOnline
             && !hasSession
+            && !isAdminUnlocked
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
         AdminLoginMenuItem.Visibility =
             isOnline
             && !hasSession
+            && !isAdminUnlocked
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
-        /*
-         * THANH TOÁN
-         */
+        LockWorkstationMenuItem.Visibility =
+            isOnline
+            && isAdminUnlocked
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
         BillPostpaidMenuItem.Visibility =
             isPostpaid
                 ? Visibility.Visible
@@ -589,19 +635,11 @@ public partial class MainWindow :
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
-        /*
-         * ĐỔI MÁY TRẠM.
-         * #12 sẽ nối chức năng thật.
-         */
         ChangeWorkstationMenuItem.Visibility =
             hasSession
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
-        /*
-         * LỆNH ĐIỀU KHIỂN WINDOWS.
-         * #13 sẽ nối chức năng thật.
-         */
         RestartWorkstationMenuItem.Visibility =
             isOnline
                 ? Visibility.Visible
@@ -617,9 +655,6 @@ public partial class MainWindow :
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
-        /*
-         * Dịch vụ chỉ thuộc phiên đang chạy.
-         */
         ServiceMenuItem.Visibility =
             hasSession
                 ? Visibility.Visible
@@ -629,6 +664,8 @@ public partial class MainWindow :
             StartPrepaidMenuItem.Visibility ==
                 Visibility.Visible
             || AdminLoginMenuItem.Visibility ==
+                Visibility.Visible
+            || LockWorkstationMenuItem.Visibility ==
                 Visibility.Visible
             || BillPostpaidMenuItem.Visibility ==
                 Visibility.Visible
@@ -827,6 +864,11 @@ public partial class MainWindow :
         if (row.ConnectionState !=
             WorkstationConnectionState
                 .Online)
+        {
+            return;
+        }
+
+        if (row.IsAdminUnlocked)
         {
             return;
         }
@@ -1052,6 +1094,14 @@ public partial class MainWindow :
         row.StartDateText =
             now.ToString(
                 "dd/MM/yyyy");
+
+        row.IsAdminUnlocked =
+            false;
+
+        QueueClientAccessState(
+            row,
+            unlocked:
+                true);
     }
 
     private void StartPrepaidSession(
@@ -1132,6 +1182,14 @@ public partial class MainWindow :
         row.StartDateText =
             now.ToString(
                 "dd/MM/yyyy");
+
+        row.IsAdminUnlocked =
+            false;
+
+        QueueClientAccessState(
+            row,
+            unlocked:
+                true);
     }
 
     private void ClearSessionState(
@@ -1164,6 +1222,9 @@ public partial class MainWindow :
         row.ServiceAmount =
             0m;
 
+        row.IsAdminUnlocked =
+            false;
+
         row.StartTimeText =
             "--";
 
@@ -1181,6 +1242,11 @@ public partial class MainWindow :
 
         ApplyConnectionAppearance(
             row);
+
+        QueueClientAccessState(
+            row,
+            unlocked:
+                false);
     }
 
     private void OnBillingTimerTick(
@@ -1383,6 +1449,30 @@ public partial class MainWindow :
                 Brushes.Transparent;
         }
 
+        if (row.IsAdminUnlocked
+            && !row.IsSessionActive)
+        {
+            row.Status =
+                "Quản trị";
+
+            row.StartTimeText =
+                "--";
+
+            row.UsedTimeText =
+                "00:00:00";
+
+            row.RemainingTimeText =
+                "--";
+
+            row.AmountText =
+                "0 đ";
+
+            row.StartDateText =
+                "--";
+
+            return;
+        }
+
         if (!row.IsSessionActive)
         {
             row.Status =
@@ -1444,6 +1534,10 @@ public partial class MainWindow :
         _billingServer
             .WorkstationConnectionChanged -=
             OnWorkstationConnectionChanged;
+
+        _billingServer
+            .AdminAccessGranted -=
+            OnAdminAccessGranted;
 
         await _billingServer
             .DisposeAsync();
@@ -1910,6 +2004,14 @@ public partial class MainWindow :
         ApplyConnectionAppearance(
             target);
 
+        target.IsAdminUnlocked =
+            false;
+
+        QueueClientAccessState(
+            target,
+            unlocked:
+                true);
+
         RefreshBillingValues();
     }
 
@@ -2236,6 +2338,160 @@ public partial class MainWindow :
             "CyberBilling",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
+    }
+
+    private void AdminLoginMenuItem_Click(
+    object sender,
+    RoutedEventArgs e)
+    {
+        if (WorkstationsGrid.SelectedItem
+            is not WorkstationRow row)
+        {
+            return;
+        }
+
+        if (row.ConnectionState !=
+                WorkstationConnectionState.Online
+            || row.IsSessionActive)
+        {
+            return;
+        }
+
+        var dialog =
+            new AdminLoginDialog
+            {
+                Owner =
+                    this
+            };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        if (!_database.VerifyAdminPassword(
+                dialog.EnteredPassword))
+        {
+            MessageBox.Show(
+                "Mật khẩu quản trị không đúng.",
+                "CyberBilling",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+
+            return;
+        }
+
+        row.IsAdminUnlocked =
+            true;
+
+        row.Status =
+            "Quản trị";
+
+        QueueClientAccessState(
+            row,
+            unlocked:
+                true);
+    }
+
+    private void LockWorkstationMenuItem_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (WorkstationsGrid.SelectedItem
+            is not WorkstationRow row)
+        {
+            return;
+        }
+
+        row.IsAdminUnlocked =
+            false;
+
+        ApplyConnectionAppearance(
+            row);
+
+        QueueClientAccessState(
+            row,
+            unlocked:
+                false);
+    }
+
+    private void QueueClientAccessState(
+    WorkstationRow row,
+    bool unlocked)
+    {
+        if (row.ConnectionState !=
+            WorkstationConnectionState.Online)
+        {
+            return;
+        }
+
+        _billingServer
+            .TryQueueWorkstationCommand(
+                row.MachineId,
+                unlocked
+                    ? WorkstationCommandType
+                        .UnlockScreen
+                    : WorkstationCommandType
+                        .LockScreen);
+    }
+
+    private void SynchronizeClientAccessState(
+        WorkstationRow row)
+    {
+        bool shouldUnlock =
+            row.IsSessionActive
+            || row.IsAdminUnlocked;
+
+        QueueClientAccessState(
+            row,
+            shouldUnlock);
+    }
+
+    private void OnAdminAccessGranted(
+    string machineId)
+    {
+        Dispatcher.Invoke(
+            () =>
+            {
+                WorkstationRow? row =
+                    _workstations
+                        .FirstOrDefault(
+                            workstation =>
+                                workstation.MachineId ==
+                                machineId);
+
+                if (row is null
+                    || row.IsSessionActive)
+                {
+                    return;
+                }
+
+                row.IsAdminUnlocked =
+                    true;
+
+                row.Status =
+                    "Quản trị";
+
+                row.StartTimeText =
+                    "--";
+
+                row.UsedTimeText =
+                    "00:00:00";
+
+                row.RemainingTimeText =
+                    "--";
+
+                row.AmountText =
+                    "0 đ";
+
+                row.StartDateText =
+                    "--";
+
+                QueueClientAccessState(
+                    row,
+                    unlocked:
+                        true);
+            });
     }
 
     private sealed record WorkstationSessionState(

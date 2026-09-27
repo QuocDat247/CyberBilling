@@ -16,4 +16,10 @@ public static class MessageTypes
 
     public const string WorkstationCommand =
         "server.workstation-command";
+
+    public const string AdminLoginRequest =
+        "client.admin-login";
+
+    public const string AdminLoginResult =
+        "server.admin-login-result";
 }
